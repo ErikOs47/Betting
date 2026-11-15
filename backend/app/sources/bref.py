@@ -221,11 +221,21 @@ def parse_boxscore(html: str, game_id: str) -> dict:
                 team_tot[t]["ft_rate"] = c.get("ft_rate")
 
     periods = 4
+    line: dict[str, list[int]] = {}
     ls = tree.css_first("table#line_score")
     if ls is not None:
-        first = ls.css_first("tbody tr")
-        if first is not None:
-            periods = max(4, len(first.css("td")) - 1)  # minus total column
+        for tr in ls.css("tr"):
+            th = tr.css_first("th")
+            name = th.text(strip=True) if th else ""
+            vals = [_num(td.text()) for td in tr.css("td")]
+            if name in team_tot and len(vals) >= 5 and all(v is not None for v in vals):
+                line[name] = [int(v) for v in vals[:-1]]  # per period, without the total column
+        if line:
+            periods = max(4, max(len(v) for v in line.values()))
+        else:
+            first = ls.css_first("tbody tr")
+            if first is not None:
+                periods = max(4, len(first.css("td")) - 1)
 
     inactive: dict[str, list[dict]] = {away: [], home: []}
     for strong in tree.css("strong"):
@@ -253,7 +263,8 @@ def parse_boxscore(html: str, game_id: str) -> dict:
         if not team_tot[t].get("pts"):
             raise SourceError(f"{game_id}: no team totals for {t}")
     return {"game_id": game_id, "home": home, "away": away, "tip_et": tip, "periods": periods,
-            "teams": team_tot, "players": players, "inactive": inactive}
+            "teams": team_tot, "players": players, "inactive": inactive,
+            "line_score": {"home": line[home], "away": line[away]} if home in line and away in line else None}
 
 
 def fetch_boxscore(game_id: str) -> dict:

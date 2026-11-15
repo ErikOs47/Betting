@@ -38,6 +38,7 @@ BOX = ('<html><div class="scorebox_meta"><div>7:30 PM, November 1, 2024</div></d
 def test_parse_boxscore():
     b = bref.parse_boxscore(BOX, "202411010CHO")
     assert (b["away"], b["home"], b["periods"]) == ("BOS", "CHO", 5)  # 4 quarters + 1 OT
+    assert b["line_score"] is None  # fixture lists only one team row
     assert b["tip_et"] == "2024-11-01T19:30:00"
     assert b["teams"]["BOS"]["pts"] == 118 and b["teams"]["CHO"]["pace"] == 99.1 and b["teams"]["BOS"]["off_rtg"] == 112.5
     p = {x["player_id"]: x for x in b["players"]}

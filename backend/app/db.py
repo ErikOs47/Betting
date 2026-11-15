@@ -49,6 +49,7 @@ class Game(Base):
     status: Mapped[str] = mapped_column(String(12), default="scheduled", index=True)  # scheduled | final
     playoffs: Mapped[bool] = mapped_column(Boolean, default=False)
     periods: Mapped[int] = mapped_column(Integer, default=4)
+    line_score: Mapped[dict[str, Any] | None] = mapped_column(JSON)  # {"home": [q1..q4, ot..], "away": [...]}
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
@@ -327,8 +328,21 @@ def get_engine():
     return _engine
 
 
+# columns added after the first release: create_all() does not alter existing tables
+_ADDED_COLUMNS = {"games": {"line_score": "JSON"}}
+
+
 def init_db() -> None:
-    Base.metadata.create_all(get_engine())
+    from sqlalchemy import inspect, text
+    eng = get_engine()
+    Base.metadata.create_all(eng)
+    insp = inspect(eng)
+    with eng.begin() as con:
+        for table, cols in _ADDED_COLUMNS.items():
+            have = {c["name"] for c in insp.get_columns(table)}
+            for name, typ in cols.items():
+                if name not in have:
+                    con.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {typ}"))
 
 
 def reset_engine() -> None:

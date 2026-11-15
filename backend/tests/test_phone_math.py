@@ -51,3 +51,63 @@ console.log(JSON.stringify({{
     for key, p, mkt in (("stake", 0.56, 0.5), ("stakeBig", 0.75, None)):
         py = size_bet(p_model=p, p_market=mkt, price=2.0, game_ids=["g"], state=RiskState(1000, 1000), cfg=cfg)
         assert out[key]["amount"] == pytest.approx(py.stake)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_js_derived_period_markets():
+    """Quarter/half/team/half-time-full-time probabilities: internal consistency of the JavaScript implementation."""
+    from scipy import stats
+    P = {"periods": {p: {"margin": {"a": 0, "b": b, "sd": sd}, "total": {"a": -4.4, "b": tb, "sd": tsd}}
+                     for p, b, sd, tb, tsd in (("h1", 0.58, 11.2, 0.52, 12.3), ("q1", 0.30, 8.3, 0.29, 8.3), ("q2", 0.28, 8.4, 0.23, 8.4),
+                                               ("q3", 0.25, 8.3, 0.28, 8.6), ("q4", 0.14, 8.1, 0.31, 8.9))},
+         "full": {"margin": {"a": 0, "b": 0.98, "sd": 14.5}}, "htft_rho": 0.67,
+         "team": {"fg": {"a": 2.0, "b": 0.98, "sd": 11.5}, "h1": {"a": 1.0, "b": 0.5, "sd": 8.0}}}
+    script = f"""
+const M = require({json.dumps(str(JS))}); const P = {json.dumps(P)}; const muM = 6, muT = 226;
+const w = (k, s, l) => M.derived(P, k, s, l, muM, muT).win;
+console.log(JSON.stringify({{
+  q1: ["home", "draw", "away"].map((s) => w("win:q1", s, null)),
+  htft: ["hh", "dh", "ah", "ha", "da", "aa"].map((s) => w("htft", s, null)),
+  h1Total: [w("total:h1", "over", 113.5), w("total:h1", "under", 113.5), M.derivedMean(P, "total:h1", muM, muT)],
+  team: [M.derivedMean(P, "team_home:fg", muM, muT), M.derivedMean(P, "team_away:fg", muM, muT), w("team_home:fg", "over", 115.5), w("team_away:fg", "over", 115.5)],
+  whole: M.derived(P, "team_home:h1", "over", 57, muM, muT),
+}}));
+"""
+    o = json.loads(subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True).stdout)
+    assert sum(o["q1"]) == pytest.approx(1.0) and o["q1"][0] > o["q1"][2] > o["q1"][1] > 0.03  # favourite > underdog > tie
+    assert o["q1"][0] == pytest.approx(stats.norm.sf(0.5, 0.30 * 6, 8.3), abs=1e-6)
+    assert sum(o["htft"]) == pytest.approx(1.0, abs=1e-6)
+    hh, dh, ah, ha, da, aa = o["htft"]
+    assert hh > aa > ah > ha  # leading at half-time and winning is most likely; comebacks are rarer
+    assert hh + ha == pytest.approx(stats.norm.sf(0.5, 0.58 * 6, 11.2), abs=2e-3)  # marginal half-time home lead
+    assert hh + dh + ah == pytest.approx(stats.norm.sf(0, 0.98 * 6, 14.5), abs=5e-3)  # marginal full-time home win
+    assert o["h1Total"][0] + o["h1Total"][1] == pytest.approx(1.0) and o["h1Total"][2] == pytest.approx(-4.4 + 0.52 * 226)
+    assert o["team"][0] - o["team"][1] == pytest.approx(0.98 * 6) and o["team"][2] > o["team"][3]
+    assert o["whole"]["push"] > 0 and o["whole"]["win"] + o["whole"]["lose"] + o["whole"]["push"] == pytest.approx(1.0)
+
+
+def test_period_model_fit_and_line_score(db):
+    import numpy as np
+    import pandas as pd
+    from app.betting import periods
+    from app.db import Game, Team
+    from datetime import date
+    rng = np.random.default_rng(3)
+    for t in ("AAA", "BBB"):
+        db.add(Team(id=t, nba_abbr=t, name=t))
+    db.flush()
+    rows = []
+    for i in range(500):
+        mu_m, mu_t = rng.normal(0, 6), rng.normal(225, 8)
+        q = [(rng.normal((mu_t + mu_m) / 8, 4), rng.normal((mu_t - mu_m) / 8, 4)) for _ in range(4)]
+        home, away = [int(round(x[0])) for x in q], [int(round(x[1])) for x in q]
+        db.add(Game(id=f"g{i}", season=2026, date=date(2026, 1, 1), home_id="AAA", away_id="BBB", status="final",
+                    home_pts=sum(home), away_pts=sum(away), line_score={"home": home, "away": away}))
+        rows.append({"id": f"g{i}", "lightgbm_mu_margin": mu_m, "lightgbm_mu_total": mu_t, "margin": sum(home) - sum(away), "total": sum(home) + sum(away)})
+    db.flush()
+    m = periods.fit(db, pd.DataFrame(rows), ["lightgbm"])
+    assert m["n"] == 500 and m["periods"]["q1"]["margin"]["b"] == pytest.approx(0.25, abs=0.11)
+    assert m["periods"]["h1"]["margin"]["b"] == pytest.approx(0.5, abs=0.15) and m["periods"]["h1"]["total"]["b"] == pytest.approx(0.5, abs=0.1)
+    assert m["team"]["fg"]["b"] == pytest.approx(1.0, abs=0.12) and 0.5 < m["htft_rho"] < 0.9
+    assert periods.period_values({"home": [30, 20, 25, 25, 12], "away": [28, 22, 25, 25, 9]})["h1"] == (50, 50)
+    assert periods.period_values({"home": [30, 20], "away": [1, 2]}) is None

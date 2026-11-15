@@ -109,8 +109,14 @@ def build(db: Session, days: int = 2) -> dict:
         "backtest": None if run is None else {"period": run.metrics.get("period"), "ece": run.metrics.get("calibration_ece")},
         "yesterday": {"date": str(yesterday), "games": results},
         "suggestions": _suggestions(db, names_all=True),
+        "periods": _periods(db),
         "games": out_games,
     }
+
+
+def _periods(db: Session) -> dict | None:
+    from app.betting import periods
+    return periods.load(db)
 
 
 def _suggestions(db: Session, names_all: bool = True) -> dict:

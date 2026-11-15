@@ -121,6 +121,24 @@ def suggestion_prior(parquet: str, algos: str = "lightgbm,xgboost") -> None:
         _p({m: {k: v.get(k) for k in ("n", "hits", "hit_rate", "expected", "k")} for m, v in prior.items()})
 
 
+@app.command("fit-periods")
+def fit_periods(parquet: str, algos: str = "lightgbm,xgboost") -> None:
+    """Backfill quarter scores and fit the quarter/half/team-total models on out-of-sample game predictions."""
+    import pandas as pd
+    from app.betting import periods
+    from app.ingest.pipeline import backfill_line_scores
+    init_db()
+    with session_scope() as db:
+        _p(backfill_line_scores(db))
+    with session_scope() as db:
+        model = periods.fit(db, pd.read_parquet(parquet), algos.split(","))
+        if model is None:
+            typer.echo("not enough games with quarter scores")
+            raise typer.Exit(1)
+        periods.store(db, model)
+        _p(model)
+
+
 @app.command("scheduled-update")
 def scheduled_update(out: str = "../phone/data.json") -> None:
     """One unattended update run: results, injuries, odds, retrain if due, predictions, settlement, phone export."""

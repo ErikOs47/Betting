@@ -243,6 +243,11 @@ def run_backtest(db: Session, *, name: str = "walkforward", algos: list[str] | N
     }
     from app.betting import suggestions
     suggestions.store_prior(db, suggestions.backtest_prior(op, algos), metrics["period"])
+    if not og.empty:
+        from app.betting import periods
+        pm = periods.fit(db, og, algos)
+        if pm is not None:
+            periods.store(db, pm)
     run = BacktestRun(name=name, config={"algos": algos, "step_days": step_days, "min_train_days": min_train_days,
                                          "features_player": len(M.PLAYER_FEATURES), "features_game": len(M.GAME_FEATURES)},
                       metrics=metrics, code_sha=code_sha())

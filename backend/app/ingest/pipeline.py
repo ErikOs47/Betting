@@ -98,6 +98,7 @@ def store_boxscore(db: Session, game: Game, box: dict) -> None:
     game.home_pts = int(box["teams"][box["home"]]["pts"])
     game.away_pts = int(box["teams"][box["away"]]["pts"])
     game.periods = box["periods"]
+    game.line_score = box.get("line_score")
     game.status = "final"
 
 
@@ -314,3 +315,23 @@ def stale_months(db: Session, before: date) -> dict[int, set[str]]:
     for season, d in db.execute(select(Game.season, Game.date).where(Game.status != "final", Game.date < before)):
         out.setdefault(season, set()).add(d.strftime("%B").lower())
     return out
+
+
+def backfill_line_scores(db: Session, *, fetch_missing: bool = True, max_fetch: int = 60) -> dict:
+    """Fill quarter scores for finished games stored before line scores were kept (uses cached pages first)."""
+    done = fetched = 0
+    for g in db.scalars(select(Game).where(Game.status == "final", Game.line_score.is_(None))):
+        cached = bref._cache("box", g.id).exists()
+        if not cached and (not fetch_missing or fetched >= max_fetch):
+            continue
+        try:
+            box = bref.fetch_boxscore(g.id)
+        except SourceError:
+            continue
+        fetched += not cached
+        if box.get("line_score"):
+            g.line_score = box["line_score"]
+            done += 1
+    db.flush()
+    return {"filled": done, "fetched": fetched,
+            "missing": db.scalar(select(func.count()).select_from(Game).where(Game.status == "final", Game.line_score.is_(None)))}

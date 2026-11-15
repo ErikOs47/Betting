@@ -108,6 +108,46 @@
     const raw = cfg.kelly * f * bankroll, cap = cfg.maxBet * bankroll;
     return { amount: Math.floor(Math.min(raw, cap) * 100) / 100, kellyFull: f, capped: raw > cap };
   }
-  const api = { lgamma, nbPmf, nbCdf, nbQuantile, normCdf, countProbs, normalProbs, homeWinProb, marketProbability, devig, ev, kelly, stake, PLAYER };
+  /** Quarter / half / team-total / half-time-full-time markets derived from the full-game means.
+      P = fitted period model (data.json "periods"), key e.g. "win:q1", "total:h1", "team_home:fg", "htft". */
+  function derivedMean(P, key, muM, muT) {
+    const [kind, per] = key.split(":");
+    if (kind === "win") return P.periods[per].margin.b * muM;
+    if (kind === "total") { const t = P.periods[per].total; return t.a + t.b * muT; }
+    if (kind === "team_home" || kind === "team_away") { const t = P.team[per]; return t.a + t.b * (muT + (kind === "team_home" ? muM : -muM)) / 2; }
+    return null;
+  }
+  function derived(P, key, sel, line, muM, muT) {
+    const [kind, per] = key.split(":");
+    if (kind === "win") {
+      const m = P.periods[per].margin, mean = m.b * muM;
+      const home = normSf(0.5, mean, m.sd), away = normCdf(-0.5, mean, m.sd), draw = Math.max(0, 1 - home - away);
+      const win = sel === "home" ? home : sel === "away" ? away : draw;
+      return { win, lose: 1 - win, push: 0 };
+    }
+    if (kind === "total" || kind === "team_home" || kind === "team_away") {
+      const sd = kind === "total" ? P.periods[per].total.sd : P.team[per].sd;
+      const p = normalProbs(derivedMean(P, key, muM, muT), sd, line);
+      return sel === "over" ? { win: p.over, lose: p.under, push: p.push } : { win: p.under, lose: p.over, push: p.push };
+    }
+    if (kind === "htft") { // sel = two letters: half-time result (h/d/a) + full-time winner (h/a)
+      const h = P.periods.h1.margin, f = P.full.margin, rho = P.htft_rho;
+      const m1 = h.b * muM, s1 = h.sd, mf = f.b * muM, sf = f.sd, sc = sf * Math.sqrt(1 - rho * rho);
+      const N = 1200, lo = m1 - 7 * s1, dx = 14 * s1 / N;
+      const acc = { h: [0, 0], d: [0, 0], a: [0, 0] };
+      for (let i = 0; i < N; i++) {
+        const x = lo + (i + 0.5) * dx, z = (x - m1) / s1;
+        const w = Math.exp(-0.5 * z * z) / (s1 * Math.sqrt(2 * Math.PI)) * dx;
+        const ftHome = 1 - normCdf(0, mf + rho * sf * z, sc);
+        const k = x > 0.5 ? "h" : x < -0.5 ? "a" : "d";
+        acc[k][0] += w * ftHome; acc[k][1] += w * (1 - ftHome);
+      }
+      const tot = acc.h[0] + acc.h[1] + acc.d[0] + acc.d[1] + acc.a[0] + acc.a[1];
+      const win = acc[sel[0]][sel[1] === "h" ? 0 : 1] / tot;
+      return { win, lose: 1 - win, push: 0 };
+    }
+    throw new Error("unknown derived market " + key);
+  }
+  const api = { derived, derivedMean, lgamma, nbPmf, nbCdf, nbQuantile, normCdf, countProbs, normalProbs, homeWinProb, marketProbability, devig, ev, kelly, stake, PLAYER };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.NBMath = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
