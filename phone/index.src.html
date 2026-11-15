@@ -1,141 +1,206 @@
 <title>NBA Value</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap">
 <style>
-/* Layout: one column, scoreboard-style game cards; a game opens as its own view with the quote calculator on top. */
+/* Layout: one calm column. Sticky glass header (brand, data status, settings, Tipps/Spiele switch);
+   content as grouped lists in soft cards. Green = model/value (from the logo), orange = brand only. */
 :root {
   color-scheme: dark;
-  --bg: #0e1012; --surface: #16191c; --surface-2: #1f2327; --line: #2b3035;
-  --ink: #eef1f3; --ink-2: #b4bcc4; --ink-3: #7e8891;
-  --accent: #4b93f2; --ball: #e2772f;
-  --good: #2fb36d; --warn: #e3a72a; --bad: #e5534b;
-  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --bg: #0b0d10; --surface: #13161a; --surface-2: #1a1e23; --surface-3: #22272d; --line: #252a31;
+  --ink: #f2f4f6; --ink-2: #a9b1ba; --ink-3: #6f7882;
+  --accent: #22c55e; --accent-soft: #123122; --accent-ink: #06210f; --brand: #e2772f;
+  --good: #22c55e; --warn: #f2b33d; --bad: #f0605a; --good-soft: #10291c; --warn-soft: #2e2511; --bad-soft: #2f1615;
+  --shadow: 0 1px 0 #ffffff08 inset; --seg-on: #2b3138;
+  --display: "Inter Tight", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --body: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --r: 18px; --r-sm: 12px;
 }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
-  color-scheme: light; --bg: #eef1f4; --surface: #ffffff; --surface-2: #f3f5f7; --line: #d9dee3;
-  --ink: #13171b; --ink-2: #3f4851; --ink-3: #6b757e; --accent: #1f6fd6; --ball: #c75f1a;
-  --good: #19864d; --warn: #9a6a00; --bad: #c23a33; } }
+  color-scheme: light; --bg: #f4f5f7; --surface: #ffffff; --surface-2: #f2f4f6; --surface-3: #e8ebef; --line: #e4e7eb;
+  --ink: #0f1419; --ink-2: #48525c; --ink-3: #7b858f; --accent: #16a34a; --accent-soft: #e5f6ec; --accent-ink: #ffffff; --brand: #d0651d;
+  --good: #15803d; --warn: #a86b00; --bad: #c2413b; --good-soft: #e5f6ec; --warn-soft: #fbf1dc; --bad-soft: #fbe7e5;
+  --shadow: 0 1px 2px #0f14190d, 0 4px 16px #0f141908; --seg-on: #ffffff; } }
 :root[data-theme="light"] {
-  color-scheme: light; --bg: #eef1f4; --surface: #ffffff; --surface-2: #f3f5f7; --line: #d9dee3;
-  --ink: #13171b; --ink-2: #3f4851; --ink-3: #6b757e; --accent: #1f6fd6; --ball: #c75f1a;
-  --good: #19864d; --warn: #9a6a00; --bad: #c23a33; }
+  color-scheme: light; --bg: #f4f5f7; --surface: #ffffff; --surface-2: #f2f4f6; --surface-3: #e8ebef; --line: #e4e7eb;
+  --ink: #0f1419; --ink-2: #48525c; --ink-3: #7b858f; --accent: #16a34a; --accent-soft: #e5f6ec; --accent-ink: #ffffff; --brand: #d0651d;
+  --good: #15803d; --warn: #a86b00; --bad: #c2413b; --good-soft: #e5f6ec; --warn-soft: #fbf1dc; --bad-soft: #fbe7e5;
+  --shadow: 0 1px 2px #0f14190d, 0 4px 16px #0f141908; --seg-on: #ffffff; }
 :root[data-theme="dark"] {
-  color-scheme: dark; --bg: #0e1012; --surface: #16191c; --surface-2: #1f2327; --line: #2b3035;
-  --ink: #eef1f3; --ink-2: #b4bcc4; --ink-3: #7e8891; --accent: #4b93f2; --ball: #e2772f;
-  --good: #2fb36d; --warn: #e3a72a; --bad: #e5534b; }
+  color-scheme: dark; --bg: #0b0d10; --surface: #13161a; --surface-2: #1a1e23; --surface-3: #22272d; --line: #252a31;
+  --ink: #f2f4f6; --ink-2: #a9b1ba; --ink-3: #6f7882; --accent: #22c55e; --accent-soft: #123122; --accent-ink: #06210f; --brand: #e2772f;
+  --good: #22c55e; --warn: #f2b33d; --bad: #f0605a; --good-soft: #10291c; --warn-soft: #2e2511; --bad-soft: #2f1615;
+  --shadow: 0 1px 0 #ffffff08 inset; --seg-on: #2b3138; }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); -webkit-font-smoothing: antialiased; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
-.wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 40px; display: grid; gap: 14px; }
+.wrap { max-width: 720px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; display: grid; gap: 18px; }
 .num { font-variant-numeric: tabular-nums; }
-h1, h2, h3 { font-family: var(--display); font-weight: 700; letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
-h1 { font-size: 1.7rem; line-height: 1; }
-h2 { font-size: 1.25rem; }
-h3 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); }
+h1, h2, h3 { font-family: var(--display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h1 { font-size: 1.15rem; font-weight: 700; }
+h2 { font-size: 1.05rem; font-weight: 650; }
+h3 { font-size: 0.95rem; font-weight: 650; }
 button, select, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
 .muted { color: var(--ink-3); font-size: 0.82rem; }
 .row { display: flex; align-items: center; gap: 10px; }
 .between { justify-content: space-between; }
-.wrapflex { flex-wrap: wrap; }
 
-header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; display: grid; gap: 8px; }
-.brand { display: flex; align-items: center; gap: 10px; }
-.brand svg { flex: none; }
-.chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; font-size: 0.78rem; color: var(--ink-2); background: var(--surface); white-space: nowrap; }
+/* header */
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand svg { flex: none; border-radius: 9px; }
+.iconbtn { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
+.iconbtn[aria-expanded="true"] { color: var(--ink); border-color: var(--ink-3); }
+.status { display: inline-flex; align-items: center; gap: 7px; font-size: 0.8rem; color: var(--ink-2); padding: 6px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
 .dot.good { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
-.notice { border: 1px solid var(--warn); border-radius: 10px; padding: 10px 12px; background: var(--surface); font-size: 0.88rem; }
-.notice.bad { border-color: var(--bad); }
+.statusdetail { display: grid; gap: 6px; font-size: 0.84rem; color: var(--ink-2); padding: 12px 14px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; background: var(--surface-2); border-radius: 12px; padding: 4px; }
+.seg button, #nav a { border: none; background: none; border-radius: 9px; padding: 8px 6px; color: var(--ink-2); text-align: center; text-decoration: none; font-weight: 500; }
+.seg button[aria-pressed="true"], #nav a[aria-current="true"] { background: var(--seg-on); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px #0000001f; }
 
-.tabs { display: flex; gap: 6px; overflow-x: auto; }
-.tab { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 12px; white-space: nowrap; }
-.tab[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); background: var(--surface-2); font-weight: 600; }
+#notices:empty { display: none; }
+.notice { border-radius: var(--r-sm); padding: 12px 14px; background: var(--warn-soft); color: var(--ink); font-size: 0.88rem; }
+.notice.bad { background: var(--bad-soft); }
 
-.games { display: grid; gap: 8px; }
-.game { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; text-align: left; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+/* day pills */
+.days { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: -4px; padding: 2px 4px; }
+.days button { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 14px; font-size: 0.88rem; color: var(--ink-2); }
+.days button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+.tabs { display: flex; gap: 8px; overflow-x: auto; }
+.tab { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; white-space: nowrap; font-weight: 500; }
+.tab.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+/* sections + cards */
+.section { display: grid; gap: 10px; }
+.sec-head { display: flex; align-items: baseline; gap: 8px; padding-inline: 4px; }
+.sec-head .count { font-size: 0.8rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.sec-head .sp { flex: 1; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 14px; min-width: 0; box-shadow: var(--shadow); }
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow); }
+.list > * + * { border-top: 1px solid var(--line); }
+.empty { padding: 16px; color: var(--ink-3); font-size: 0.88rem; }
+details.hint { padding-inline: 4px; }
+details.hint summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 0.8rem; cursor: pointer; }
+details.hint summary::-webkit-details-marker { display: none; }
+details.hint summary::before { content: "i"; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--ink-3); font-size: 0.68rem; font-weight: 700; font-style: italic; }
+details.hint p { margin: 8px 0 0; color: var(--ink-2); font-size: 0.85rem; max-width: 62ch; }
+details.more > summary { cursor: pointer; color: var(--ink-2); font-size: 0.88rem; font-weight: 500; }
+
+/* list items (tips, saved quotes) */
+.item { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; background: none; border: none; text-align: left; }
+.item:active { background: var(--surface-2); }
+.item-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.item-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-title .team { color: var(--ink-3); font-weight: 500; font-size: 0.82rem; margin-left: 4px; }
+.item-bet { font-size: 0.9rem; color: var(--ink-2); }
+.item-bet strong { color: var(--ink); font-weight: 600; }
+.item-meta { font-size: 0.78rem; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-side { flex: none; text-align: right; display: grid; gap: 2px; justify-items: end; }
+.pbig { font-family: var(--display); font-size: 1.45rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+.pbig small { font-size: 0.75rem; font-weight: 600; color: var(--ink-3); margin-left: 1px; }
+.meter { width: 56px; height: 4px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.minq { font-size: 0.78rem; color: var(--ink-3); white-space: nowrap; }
+.minq b { color: var(--ink); font-weight: 600; }
+.saved { display: grid; }
+.saved .item-title, .saved .item-meta { white-space: normal; }
+.saved-row { display: flex; align-items: stretch; }
+.saved-row .item { flex: 1; }
+.act { flex: none; border: none; border-left: 1px solid var(--line); background: none; padding: 0 14px; color: var(--ink-3); font-size: 0.8rem; font-weight: 600; }
+.act.clv { color: var(--accent); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.pill.good { background: var(--good-soft); color: var(--good); } .pill.warn { background: var(--warn-soft); color: var(--warn); } .pill.bad { background: var(--bad-soft); color: var(--bad); }
+.clvform { display: grid; gap: 10px; padding: 12px 16px 16px; background: var(--surface-2); }
+
+/* KPIs */
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.kpi { background: var(--surface-2); border-radius: var(--r-sm); padding: 10px 12px; min-width: 0; }
+.kpi .k { font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .v { white-space: nowrap; font-family: var(--display); font-size: 1.2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; }
+.kpi .s { font-size: 0.74rem; color: var(--ink-3); line-height: 1.35; }
+
+/* games */
+.games { display: grid; gap: 10px; }
+.game { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; text-decoration: none; box-shadow: var(--shadow); }
 .game:active { background: var(--surface-2); }
-.teams { font-family: var(--display); font-size: 1.35rem; font-weight: 700; line-height: 1.1; }
-.teams .at { color: var(--ink-3); font-weight: 600; padding: 0 4px; }
-.prob { font-family: var(--display); font-size: 1.35rem; font-weight: 700; text-align: right; }
-.bar { grid-column: 1 / -1; height: 4px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: flex; }
+.g-top { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--ink-3); }
+.g-team { display: grid; grid-template-columns: 3.2rem 1fr auto; align-items: baseline; gap: 8px; }
+.g-team .abbr { font-family: var(--display); font-weight: 700; font-size: 1.1rem; letter-spacing: 0.01em; }
+.g-team .name { color: var(--ink-2); font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-team .p { font-family: var(--display); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.g-team.fav .p, .g-team.fav .abbr { color: var(--ink); }
+.g-team.fav .p { color: var(--accent); }
+.bar { height: 6px; border-radius: 6px; background: var(--surface-3); overflow: hidden; display: flex; }
 .bar span { display: block; height: 100%; }
-.bar .h { background: var(--accent); } .bar .a { background: var(--line); }
-.meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--ink-2); font-size: 0.82rem; }
+.bar .lo { background: var(--surface-3); } .bar .hi { background: var(--accent); }
+.g-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--ink-3); font-size: 0.8rem; }
 
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
-.back { background: none; border: none; color: var(--accent); padding: 4px 0; font-weight: 600; justify-self: start; }
-.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.kpi { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; min-width: 0; }
-.kpi .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
-.kpi .v { font-family: var(--display); font-size: 1.35rem; font-weight: 700; }
-.kpi .s { font-size: 0.74rem; color: var(--ink-3); }
+/* game detail */
+.back { justify-self: start; color: var(--accent); text-decoration: none; font-weight: 600; padding: 2px 0; }
+.hero { display: grid; gap: 4px; }
+.hero h2 { font-size: 1.5rem; font-weight: 700; }
+.hero .at { color: var(--ink-3); font-weight: 500; }
 
-.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.form label { display: grid; gap: 4px; font-size: 0.78rem; color: var(--ink-2); min-width: 0; }
+/* calculator */
+.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.form label { display: grid; gap: 6px; font-size: 0.78rem; font-weight: 500; color: var(--ink-2); min-width: 0; }
 .form .full { grid-column: 1 / -1; }
-select, input { width: 100%; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: 16px; }
-.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
-.seg button { border: none; background: none; border-radius: 6px; padding: 7px 4px; color: var(--ink-2); }
-.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
-#nav a { text-align: center; text-decoration: none; border-radius: 6px; padding: 7px 4px; color: var(--ink-2); }
-#nav a[aria-current="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
-.back { text-decoration: none; }
-.tips { display: grid; gap: 8px; }
-.tip { display: flex; align-items: stretch; gap: 6px; width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; text-align: left; }
-.tipmain { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; flex: 1; min-width: 0; background: none; border: none; text-align: left; }
-.tip.tipmain { background: var(--surface-2); border: 1px solid var(--line); }
-.tipname { font-weight: 600; }
-.tipwrap { display: grid; gap: 6px; }
-.clvform { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
-.tipdel[data-clv] { font-size: 0.78rem; font-weight: 600; color: var(--accent); }
-.tipright { text-align: right; flex: none; }
-.tipdel { background: none; border: none; border-left: 1px solid var(--line); padding: 0 12px; color: var(--ink-3); }
-.verdictchip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; }
-.result { display: grid; gap: 10px; }
-.verdict { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 10px 12px; border: 1px solid var(--line); background: var(--surface-2); }
-.verdict.good { border-color: var(--good); } .verdict.bad { border-color: var(--bad); } .verdict.warn { border-color: var(--warn); }
-.verdict b { font-family: var(--display); font-size: 1.2rem; }
-.reasons { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 0.84rem; }
-
+select, input { width: 100%; min-width: 0; background: var(--surface-2); border: 1px solid transparent; border-radius: 12px; padding: 11px 12px; font-size: 16px; }
+select:focus, input:focus { border-color: var(--accent); outline: none; background: var(--surface); }
+.result { display: grid; gap: 12px; }
+.verdict { display: flex; align-items: center; gap: 12px; border-radius: var(--r-sm); padding: 12px 14px; background: var(--surface-2); }
+.verdict.good { background: var(--good-soft); } .verdict.warn { background: var(--warn-soft); } .verdict.bad { background: var(--bad-soft); }
+.verdict b { font-family: var(--display); font-size: 1.15rem; }
+.verdict.good b { color: var(--good); } .verdict.warn b { color: var(--warn); } .verdict.bad b { color: var(--bad); }
+.verdict .num { margin-left: auto; color: var(--ink-2); font-size: 0.88rem; }
+.reasons { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 0.84rem; display: grid; gap: 2px; }
 .dist svg { width: 100%; height: auto; display: block; }
 .dist text { fill: var(--ink-3); font: 11px var(--body); }
 
-.tablewrap { overflow-x: auto; margin-inline: -14px; padding-inline: 14px; }
-table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
-th { text-align: right; font-weight: 500; color: var(--ink-3); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 6px; white-space: nowrap; }
-td { text-align: right; padding: 8px 6px; border-top: 1px solid var(--line); white-space: nowrap; }
+/* tables */
+.tablewrap { overflow-x: auto; margin-inline: -16px; padding-inline: 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th { text-align: right; font-weight: 500; color: var(--ink-3); font-size: 0.72rem; letter-spacing: 0.03em; text-transform: uppercase; padding: 0 8px 8px; white-space: nowrap; }
+td { text-align: right; padding: 10px 8px; border-top: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
 th:first-child, td:first-child { text-align: left; padding-left: 0; }
+th:last-child, td:last-child { padding-right: 0; }
 td.player { white-space: normal; min-width: 8.5rem; }
 td.player button { background: none; border: none; padding: 0; color: var(--ink); font-weight: 600; text-align: left; }
-.dim { opacity: 0.55; }
-.inj { display: grid; gap: 6px; font-size: 0.86rem; }
-.inj .st { font-size: 0.72rem; font-weight: 600; border-radius: 6px; padding: 1px 6px; border: 1px solid var(--line); }
-.st.Out, .st.Doubtful { color: var(--bad); border-color: var(--bad); }
-.st.Questionable { color: var(--warn); border-color: var(--warn); }
-details summary { cursor: pointer; color: var(--ink-2); }
-footer { color: var(--ink-3); font-size: 0.78rem; display: grid; gap: 6px; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.dim { opacity: 0.5; }
+.inj { display: grid; gap: 8px; font-size: 0.88rem; }
+.inj .team-h { font-weight: 600; margin-top: 4px; }
+.st { font-size: 0.72rem; font-weight: 600; border-radius: 999px; padding: 2px 8px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+.st.Out, .st.Doubtful { background: var(--bad-soft); color: var(--bad); }
+.st.Questionable { background: var(--warn-soft); color: var(--warn); }
+
+footer { color: var(--ink-3); font-size: 0.76rem; display: grid; gap: 6px; padding-inline: 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
 </style>
 
 <div class="wrap">
   <header class="top">
     <div class="row between">
-      <div class="brand">
-        <svg width="34" height="34" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="96" fill="#111110"/><g transform="translate(256 256) scale(0.8824) translate(-256 -256)"><circle cx="256" cy="256" r="170" fill="#e2772f"/><g fill="none" stroke="#111110" stroke-width="15" stroke-linecap="round"><path d="M256 86V426M86 256H426"/><path d="M150 124c58 44 86 84 86 132s-28 88-86 132"/><path d="M362 124c-58 44-86 84-86 132s28 88 86 132"/></g></g><g stroke="#111110" stroke-linejoin="round" stroke-linecap="round"><path d="M130.9 357.4 L231.3 226.0 L263.3 302.7 L370.2 173.5" fill="none" stroke-width="58"/><path d="M393.2 145.7 L389.3 202.2 L338.4 160.1 Z" fill="#111110" stroke-width="26"/></g><path d="M130.9 357.4 L231.3 226.0 L263.3 302.7 L370.2 173.5" fill="none" stroke="#22c55e" stroke-width="30" stroke-linejoin="round" stroke-linecap="round"/><path d="M393.2 145.7 L389.3 202.2 L338.4 160.1 Z" fill="#22c55e" stroke="#22c55e" stroke-width="4" stroke-linejoin="round"/></svg>
-        <h1>NBA Value</h1>
+      <div class="brand"><svg width="32" height="32" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="96" fill="#111110"/><g transform="translate(256 256) scale(0.8824) translate(-256 -256)"><circle cx="256" cy="256" r="170" fill="#e2772f"/><g fill="none" stroke="#111110" stroke-width="15" stroke-linecap="round"><path d="M256 86V426M86 256H426"/><path d="M150 124c58 44 86 84 86 132s-28 88-86 132"/><path d="M362 124c-58 44-86 84-86 132s28 88 86 132"/></g></g><g stroke="#111110" stroke-linejoin="round" stroke-linecap="round"><path d="M130.9 357.4 L231.3 226.0 L263.3 302.7 L370.2 173.5" fill="none" stroke-width="58"/><path d="M393.2 145.7 L389.3 202.2 L338.4 160.1 Z" fill="#111110" stroke-width="26"/></g><path d="M130.9 357.4 L231.3 226.0 L263.3 302.7 L370.2 173.5" fill="none" stroke="#22c55e" stroke-width="30" stroke-linejoin="round" stroke-linecap="round"/><path d="M393.2 145.7 L389.3 202.2 L338.4 160.1 Z" fill="#22c55e" stroke="#22c55e" stroke-width="4" stroke-linejoin="round"/></svg><h1>NBA Value</h1></div>
+      <div class="row" style="gap:8px">
+        <button type="button" class="status" id="status" aria-expanded="false" aria-controls="statusDetail"><span class="dot"></span>Lade …</button>
+        <button type="button" class="iconbtn" id="settingsBtn" aria-expanded="false" aria-controls="settings" aria-label="Einstellungen">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+        </button>
       </div>
-      <button class="tab" id="settingsBtn" aria-expanded="false" aria-controls="settings">Einstellungen</button>
     </div>
     <nav class="seg" id="nav" aria-label="Ansicht"><a href="#" data-view="tips">Tipps</a><a href="#spiele" data-view="list">Spiele</a></nav>
-    <div class="chips" id="status"><span class="chip"><span class="dot"></span>Lade Daten …</span></div>
   </header>
+
+  <div class="statusdetail" id="statusDetail" hidden></div>
 
   <section class="card" id="settings" hidden>
     <h3>Einstellungen auf diesem Gerät</h3>
@@ -143,15 +208,15 @@ footer { color: var(--ink-3); font-size: 0.78rem; display: grid; gap: 6px; }
       <label>Bankroll (€)<input id="bankroll" inputmode="decimal" autocomplete="off"></label>
       <label>Wettsteuer auf Gewinn (%)<input id="tax" inputmode="decimal" autocomplete="off"></label>
     </div>
-    <p class="muted">Die Daten werden täglich um ca. 7:50 und 16:50 Uhr aktualisiert. Für ein zusätzliches Update: die geplante Aufgabe „NBA Update“ in Claude Code jetzt ausführen lassen, oder Claude Code bitten: „Führe die Aufgabe NBA Update jetzt aus.“ Ein Lauf dauert etwa 5 Minuten. Einsatzvorschläge: ¼ Kelly, höchstens <span id="maxBetTxt">1 %</span> der Bankroll pro Wette.</p>
+    <p class="muted" style="margin:0">Einsatzvorschläge: ¼ Kelly, höchstens <span id="maxBetTxt">1 %</span> der Bankroll pro Wette. Die Daten werden täglich gegen 7:50 und 16:50 Uhr aktualisiert. Für ein Extra-Update in Claude Code die Aufgabe „NBA Update“ ausführen lassen (dauert etwa 5 Minuten).</p>
   </section>
 
-  <div id="notices"></div>
+  <div id="notices" style="display:grid;gap:8px"></div>
   <main id="view"></main>
 
   <footer>
     <div id="modelInfo"></div>
-    <div>Nur Analyse und Paper Betting, keine Gewinngarantie. Glücksspiel kann süchtig machen: BZgA-Hotline 0800 1 37 27 00.</div>
+    <div>Analyse und Paper Betting, keine Gewinngarantie. Glücksspiel kann süchtig machen: BZgA 0800 1 37 27 00.</div>
   </footer>
 </div>
 
@@ -223,6 +288,12 @@ const ageH = (iso) => (Date.now() - new Date(iso).getTime()) / 3.6e6;
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 const gameDay = (g) => `${g.id.slice(0, 4)}-${g.id.slice(4, 6)}-${g.id.slice(6, 8)}`;
 const dayLabel = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" });
+const dayShort = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+const pctBig = (p) => `${Math.round(p * 100)}<small>%</small>`;
+const meter = (p) => `<span class="meter" aria-hidden="true"><i style="width:${Math.round(Math.min(1, Math.max(0, p)) * 100)}%"></i></span>`;
+function dayPills(days) {
+  return `<div class="days" role="group" aria-label="Spieltag">${days.map((d) => `<button type="button" data-day="${d}" aria-pressed="${d === day}">${esc(dayShort(d))}</button>`).join("")}</div>`;
+}
 const bankroll = () => parse(store.get("nbi-bankroll", "")) ?? D.settings.bankroll;
 const tax = () => { const v = parse(store.get("nbi-tax", "")); return v == null ? D.settings.payoutTax : v / 100; };
 const started = (g) => new Date(g.tip).getTime() <= Date.now();
@@ -244,19 +315,20 @@ async function load() {
 
 function renderStatus() {
   const age = ageH(D.generatedAt), inj = D.data.injuryReport ? ageH(D.data.injuryReport) : null;
-  const chips = [
-    `<span class="chip"><span class="dot ${age < 13 ? "good" : "warn"}"></span>Stand ${fmtShort(D.generatedAt)}</span>`,
-    `<span class="chip"><span class="dot ${inj != null && inj < 6 ? "good" : "warn"}"></span>Verletzungen ${D.data.injuryReport ? fmtShort(D.data.injuryReport) : "fehlen"}</span>`,
-    `<span class="chip"><span class="dot ${D.data.staleResults ? "bad" : "good"}"></span>Ergebnisse bis ${new Date(D.data.lastResult + "T12:00:00").toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}</span>`,
-  ];
-  $("#status").innerHTML = chips.join("");
+  const tone = D.data.staleResults ? "bad" : age >= 13 || inj == null || inj >= 6 ? "warn" : "good";
+  $("#status").innerHTML = `<span class="dot ${tone}"></span>Stand ${fmtTime(D.generatedAt)}`;
+  const lastRes = new Date(D.data.lastResult + "T12:00:00").toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+  $("#statusDetail").innerHTML = `
+    <div class="row between"><span>Prognosen berechnet</span><span class="num">${fmtWhen(D.generatedAt)}</span></div>
+    <div class="row between"><span>Offizieller Injury Report</span><span class="num">${D.data.injuryReport ? fmtWhen(D.data.injuryReport) : "fehlt"}</span></div>
+    <div class="row between"><span>Ergebnisse bis</span><span class="num">${lastRes}</span></div>`;
   const n = [];
-  if (age >= 13) n.push(`<div class="notice">Die Daten sind ${Math.round(age)} Stunden alt. Verletzungen und Aufstellungen können sich seitdem geändert haben. Für ein Update die Aufgabe „NBA Update“ in Claude Code jetzt ausführen lassen.</div>`);
+  if (age >= 13) n.push(`<div class="notice">Die Daten sind ${Math.round(age)} Stunden alt. Verletzungen können sich seitdem geändert haben.</div>`);
   if (D.data.staleResults) n.push(`<div class="notice bad">Für ${D.data.staleResults} vergangene Spiele fehlen Ergebnisse. Die Prognosen sind deshalb deaktiviert.</div>`);
   $("#notices").innerHTML = n.join("");
   const bt = D.backtest?.period;
-  $("#modelInfo").textContent = `Modelle LightGBM + XGBoost, trainiert bis ${D.data.trainEnd ?? "–"} auf ${D.data.finalGames} Spielen` +
-    (bt ? `; geprüft out-of-sample vom ${bt.start} bis ${bt.end} (${bt.n_player_rows.toLocaleString("de-DE")} Spieler-Spiele).` : ".");
+  $("#modelInfo").textContent = `LightGBM + XGBoost, trainiert bis ${D.data.trainEnd ?? "–"} auf ${D.data.finalGames.toLocaleString("de-DE")} Spielen` +
+    (bt ? `, geprüft an ${bt.n_player_rows.toLocaleString("de-DE")} unbekannten Spieler-Spielen.` : ".");
 }
 
 function renderSettings() {
@@ -264,7 +336,9 @@ function renderSettings() {
   $("#tax").value = String(+(tax() * 100).toFixed(2)).replace(".", ",");
   $("#maxBetTxt").textContent = pct(D.settings.maxBet, 0);
 }
-$("#settingsBtn").addEventListener("click", () => { const s = $("#settings"); s.hidden = !s.hidden; $("#settingsBtn").setAttribute("aria-expanded", String(!s.hidden)); });
+const toggle = (btn, panel) => { const el = $(panel); el.hidden = !el.hidden; $(btn).setAttribute("aria-expanded", String(!el.hidden)); };
+$("#settingsBtn").addEventListener("click", () => toggle("#settingsBtn", "#settings"));
+$("#status").addEventListener("click", () => toggle("#status", "#statusDetail"));
 $("#bankroll").addEventListener("change", (e) => { const v = parse(e.target.value); if (v != null && v > 0) store.set("nbi-bankroll", String(v)); renderSettings(); route(); });
 $("#tax").addEventListener("change", (e) => { const v = parse(e.target.value); if (v != null && v >= 0 && v < 20) store.set("nbi-tax", String(v)); renderSettings(); route(); });
 
@@ -284,26 +358,20 @@ function homeProb(g) { return g.model ? M.marketProbability(g.model.margin, "mon
 function renderList() {
   const days = [...new Set(D.games.map(gameDay))].sort();
   const games = D.games.filter((g) => gameDay(g) === day);
-  const tabs = days.map((d) => `<button class="tab" data-day="${d}" aria-pressed="${d === day}">${esc(dayLabel(d))}</button>`).join("");
   const cards = games.map((g) => {
-    const p = homeProb(g);
-    const m = g.model;
-    const meta = m ? [
-      `<span class="num">fair ${dec(1 / p)} / ${dec(1 / (1 - p))}</span>`,
-      `<span class="num">Margin ${m.margin.mu > 0 ? "+" : ""}${dec(m.margin.mu, 1)}</span>`,
-      `<span class="num">Total ${dec(m.total.mu, 1)}</span>`,
-      m.on ? "" : `<span style="color:var(--warn)">Prognose deaktiviert</span>`,
-      started(g) ? `<span>läuft / beendet</span>` : "",
-    ].join("") : `<span>keine Prognose</span>`;
-    return `<a class="game" href="#spiel-${g.id}" style="text-decoration:none;color:inherit">
-      <div><div class="teams">${g.away}<span class="at">@</span>${g.home}</div><div class="muted">${fmtTime(g.tip)} Uhr · ${esc(g.awayName)} bei ${esc(g.homeName)}</div></div>
-      <div><div class="prob num">${p == null ? "–" : pct(p, 0)}</div><div class="muted" style="text-align:right">${g.home} gewinnt</div></div>
-      ${p == null ? "" : `<div class="bar" aria-hidden="true"><span class="h" style="width:${p * 100}%"></span><span class="a" style="width:${(1 - p) * 100}%"></span></div>`}
-      <div class="meta">${meta}</div></a>`;
+    const p = homeProb(g), m = g.model;
+    const team = (side, prob) => `<div class="g-team ${prob != null && prob >= 0.5 ? "fav" : ""}"><span class="abbr">${g[side]}</span><span class="name">${esc(g[side + "Name"])}</span><span class="p">${prob == null ? "–" : pct(prob, 0)}</span></div>`;
+    const badge = started(g) ? `<span class="pill warn">läuft / beendet</span>` : m && !m.on ? `<span class="pill warn">Prognose deaktiviert</span>` : "";
+    return `<a class="game" href="#spiel-${g.id}">
+      <div class="g-top"><span class="num">${fmtTime(g.tip)} Uhr</span>${badge}</div>
+      ${team("away", p == null ? null : 1 - p)}${team("home", p)}
+      ${p == null ? "" : `<div class="bar" aria-hidden="true"><span class="${p < 0.5 ? "hi" : "lo"}" style="width:${(1 - p) * 100}%"></span><span class="${p >= 0.5 ? "hi" : "lo"}" style="width:${p * 100}%"></span></div>`}
+      ${m ? `<div class="g-meta num"><span>Vorsprung ${g.home} ${m.margin.mu > 0 ? "+" : ""}${dec(m.margin.mu, 1)}</span><span>Punkte ${dec(m.total.mu, 0)}</span><span>fair ${dec(1 / (1 - p))} / ${dec(1 / p)}</span></div>` : `<div class="g-meta">keine Prognose</div>`}
+    </a>`;
   }).join("");
-  const y = D.yesterday.games.length ? `<details class="card"><summary>Ergebnisse vom ${esc(dayLabel(D.yesterday.date))}</summary><div class="inj num">${
+  const y = D.yesterday.games.length ? `<details class="card more"><summary>Ergebnisse ${esc(dayShort(D.yesterday.date))}</summary><div class="inj num">${
     D.yesterday.games.map((r) => `<div class="row between"><span>${r.away} @ ${r.home}</span><span>${r.ap} : ${r.hp}</span></div>`).join("")}</div></details>` : "";
-  $("#view").innerHTML = `<div style="display:grid;gap:12px"><div class="tabs" role="group" aria-label="Spieltag">${tabs}</div>
+  $("#view").innerHTML = `<div style="display:grid;gap:14px">${dayPills(days)}
     <div class="games">${cards || `<div class="card muted">An diesem Tag sind keine Spiele angesetzt.</div>`}</div>${y}</div>`;
   document.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { day = b.dataset.day; store.set("nbi-day", day); renderList(); }));
 }
@@ -319,25 +387,26 @@ function defaultLine(g) {
 }
 
 function renderGame(g) {
-  if (!g.model) { $("#view").innerHTML = `<a class="back" href="#spiele">← Alle Spiele</a><div class="card">Für dieses Spiel gibt es keine Prognose.</div>`; return; }
+  if (!g.model) { $("#view").innerHTML = `<div style="display:grid;gap:14px"><a class="back" href="#spiele">‹ Spiele</a><div class="card">Für dieses Spiel gibt es keine Prognose.</div></div>`; return; }
   if (calc.game !== g.id) Object.assign(calc, { game: g.id, market: "moneyline", sel: "home", player: g.players[0]?.id ?? null, line: "", price: "", opp: "" });
   if (!calc.player) calc.player = g.players[0]?.id ?? null;
   const p = homeProb(g), m = g.model;
-  const inj = (side) => (g.injuries[side].length ? g.injuries[side].map((i) => `<div class="row between"><span>${esc(i.name)}<span class="muted"> · ${esc(i.reason)}</span></span><span class="st ${esc(i.status)}">${esc(i.status)}</span></div>`).join("") : `<div class="muted">keine Meldungen</div>`);
+  const ST_DE = { Out: "fällt aus", Doubtful: "unwahrscheinlich", Questionable: "fraglich", Probable: "wahrscheinlich" };
+  const inj = (side) => (g.injuries[side].length ? g.injuries[side].map((i) => `<div class="row between"><span style="min-width:0">${esc(i.name)}<span class="muted"> · ${esc(i.reason.replace(/^Injury\/Illness-/, ""))}</span></span><span class="st ${esc(i.status)}">${esc(ST_DE[i.status] ?? i.status)}</span></div>`).join("") : `<div class="muted">keine Meldungen</div>`);
   const rows = g.players.map((pl) => `<tr class="${pl.on ? "" : "dim"}"><td class="player"><button data-player="${pl.id}">${esc(pl.name)}</button><div class="muted">${pl.team} · ${dec(pl.min, 0)} Min${pl.flags.filter((f) => f !== "injury_report_stale").map((f) => " · " + (FLAGS[f] ?? f)).join("")}</div></td>${
     ["points", "rebounds", "assists"].map((k) => `<td class="num">${pl.d[k] ? dec(pl.d[k].mu, 1) : "–"}</td>`).join("")}<td class="num">${pct(pl.dd, 0)}</td><td class="num">${pct(pl.td, 0)}</td></tr>`).join("");
   $("#view").innerHTML = `
-    <div style="display:grid;gap:12px">
-      <a class="back" href="#spiele">← Alle Spiele</a>
-      <div><h2>${esc(g.awayName)} @ ${esc(g.homeName)}</h2><div class="muted">${fmtWhen(g.tip)} Uhr · Datenqualität ${pct(m.q, 0)}${m.on ? "" : " · Prognose deaktiviert"}</div></div>
+    <div style="display:grid;gap:16px">
+      <a class="back" href="#spiele">‹ Spiele</a>
+      <div class="hero"><h2>${g.away} <span class="at">@</span> ${g.home}</h2><div class="muted">${esc(g.awayName)} bei ${esc(g.homeName)} · ${fmtWhen(g.tip)} Uhr${m.on ? "" : " · Prognose deaktiviert"}</div></div>
       ${started(g) ? `<div class="notice">Das Spiel hat bereits begonnen. Die Prognose gilt nur vor dem Spiel; Live-Quoten sind damit nicht vergleichbar.</div>` : ""}
       <div class="kpis">
-        <div class="kpi"><div class="k">${g.home} gewinnt</div><div class="v num">${pct(p, 0)}</div><div class="s num">fair ${dec(1 / p)} / ${dec(1 / (1 - p))}</div></div>
-        <div class="kpi"><div class="k">Margin ${g.home}</div><div class="v num">${m.margin.mu > 0 ? "+" : ""}${dec(m.margin.mu, 1)}</div><div class="s num">± ${dec(m.margin.sigma, 1)}</div></div>
-        <div class="kpi"><div class="k">Gesamtpunkte</div><div class="v num">${dec(m.total.mu, 1)}</div><div class="s num">± ${dec(m.total.sigma, 1)}</div></div>
+        <div class="kpi"><div class="k">Sieg ${g.home}</div><div class="v num">${pct(p, 0)}</div><div class="s num">fair ${dec(1 / p)}</div></div>
+        <div class="kpi"><div class="k">Differenz</div><div class="v num">${m.margin.mu > 0 ? "+" : ""}${dec(m.margin.mu, 1)}</div><div class="s num">± ${dec(m.margin.sigma, 0)}</div></div>
+        <div class="kpi"><div class="k">Punkte</div><div class="v num">${dec(m.total.mu, 1)}</div><div class="s num">± ${dec(m.total.sigma, 0)}</div></div>
       </div>
       <section class="card" aria-labelledby="calcTitle">
-        <h3 id="calcTitle">Quote prüfen</h3>
+        <div><h3 id="calcTitle">Quote prüfen</h3><div class="muted">Wette wählen, Quote deines Buchmachers eintragen.</div></div>
         <div class="form">
           <label class="full">Markt<select id="cMarket">${CALC_TYPES.map((k) => `<option value="${k}">${esc(typeLabel(k, g))}</option>`).join("")}</select></label>
           <label class="full" id="cPeriodWrap">Abschnitt<select id="cPeriod"></select></label>
@@ -350,11 +419,11 @@ function renderGame(g) {
         <div class="result" id="cResult" aria-live="polite"></div>
       </section>
       ${periodCard(g)}
-      <section class="card"><h3>Verletzungen</h3><div class="inj"><strong>${esc(g.awayName)}</strong>${inj("away")}<strong>${esc(g.homeName)}</strong>${inj("home")}</div>
-        <div class="muted">Offizieller NBA Injury Report, Stand ${D.data.injuryReport ? fmtWhen(D.data.injuryReport) : "–"}.</div></section>
-      <section class="card"><h3>Spieler: erwartete Werte</h3>
+      <section class="card"><div class="row between"><h3>Verletzungen</h3><span class="muted">${D.data.injuryReport ? fmtShort(D.data.injuryReport) : ""}</span></div>
+        <div class="inj"><div class="team-h">${esc(g.awayName)}</div>${inj("away")}<div class="team-h">${esc(g.homeName)}</div>${inj("home")}</div></section>
+      <section class="card"><h3>Spieler</h3>
         <div class="tablewrap"><table><thead><tr><th>Spieler</th><th>PTS</th><th>REB</th><th>AST</th><th>DD</th><th>TD</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <div class="muted">DD/TD: Wahrscheinlichkeit für Double-Double bzw. Triple-Double. Antippen übernimmt den Spieler in „Quote prüfen“.</div></section>
+        <div class="muted">Erwartete Werte. DD/TD = Wahrscheinlichkeit für Double-/Triple-Double. Name antippen übernimmt den Spieler in den Rechner.</div></section>
     </div>`;
   const bind = () => {
     calc.line = $("#cLine").value; calc.price = $("#cPrice").value; calc.opp = $("#cOpp").value; compute(g);
@@ -382,9 +451,12 @@ function periodCard(g) {
   const hf = HTFT.map((sel) => `<div class="kpi"><div class="k">${selName(g, sel)}</div><div class="v num">${pct(M.derived(P, "htft", sel, null, muM, muT).win, 0)}</div></div>`).join("");
   return `<section class="card"><h3>Halbzeit, Viertel, Teams</h3>
     <div class="tablewrap"><table><thead><tr><th>Abschnitt</th><th>${g.home}</th><th>X</th><th>${g.away}</th><th>Punkte</th></tr></thead><tbody>${["h1", "q1", "q2", "q3", "q4"].map(row).join("")}</tbody></table></div>
-    <div class="num">Punkte ${g.home}: ${team("team_home")} · ${g.away}: ${team("team_away")}</div>
-    <details><summary>Halbzeit/Endstand</summary><div class="kpis" style="margin-top:8px">${hf}</div></details>
-    <div class="muted">Gewinn-Wahrscheinlichkeit je Abschnitt (X = Unentschieden) und erwartete Punkte beider Teams zusammen. Quoten dazu im Rechner unter „Sieger“, „Gesamtpunkte“ oder „Punkte Team“ mit dem passenden Abschnitt prüfen.</div></section>`;
+    <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div class="kpi"><div class="k">Punkte ${g.away}</div><div class="v num">${dec(M.derivedMean(P, "team_away:fg", muM, muT), 1)}</div><div class="s num">1. HZ ${dec(M.derivedMean(P, "team_away:h1", muM, muT), 1)}</div></div>
+      <div class="kpi"><div class="k">Punkte ${g.home}</div><div class="v num">${dec(M.derivedMean(P, "team_home:fg", muM, muT), 1)}</div><div class="s num">1. HZ ${dec(M.derivedMean(P, "team_home:h1", muM, muT), 1)}</div></div>
+    </div>
+    <details class="more"><summary>Halbzeit/Endstand</summary><div class="kpis" style="margin-top:10px">${hf}</div></details>
+    <details class="hint"><summary>So funktioniert's</summary><p>Gewinn-Wahrscheinlichkeit je Abschnitt (X = Unentschieden) und erwartete Punkte beider Teams zusammen, abgeleitet aus der Prognose für das ganze Spiel. Quoten dazu im Rechner unter „Sieger“, „Gesamtpunkte“ oder „Punkte Team“ mit dem passenden Abschnitt prüfen.</p></details></section>`;
 }
 
 function syncForm(g) {
@@ -483,9 +555,11 @@ function compute(g) {
       <div class="kpi"><div class="k">Einsatz</div><div class="v num">${a.ev > 0 && !a.noStake ? eur(a.st.amount) : "–"}</div><div class="s num">¼ Kelly${a.st.capped ? `, Limit ${pct(S.maxBet, 0)}` : ""}</div></div>
     </div>`;
   if (a.reasons.length) html += `<ul class="reasons">${a.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`;
-  if (isDerived(c.market)) html += `<div class="muted">Viertel-, Halbzeit- und Team-Wetten sind aus der Prognose für das ganze Spiel abgeleitet. Sie sind nicht einzeln gegen Buchmacherquoten geprüft; bei Sieger-Wetten war das Modell im Test nicht besser als eine einfache Stärke-Rangliste.</div>`;
-  if (a.edge == null && !threeWay(c.market)) html += `<div class="muted">Ohne Gegenquote wird der Einsatz nur aus dem Modell berechnet (ohne Abgleich mit dem Markt) und fällt dadurch größer aus.</div>`;
-  html += `<button type="button" class="tab" id="cSave">Quote merken (erscheint unter Tipps)</button>`;
+  const notes = [];
+  if (isDerived(c.market)) notes.push("Viertel-, Halbzeit- und Team-Wetten sind aus der Prognose für das ganze Spiel abgeleitet und nicht einzeln gegen Buchmacherquoten geprüft.");
+  if (a.edge == null && !threeWay(c.market)) notes.push("Ohne Gegenquote wird der Einsatz nur aus dem Modell berechnet und fällt dadurch größer aus.");
+  if (notes.length) html += `<details class="hint"><summary>Hinweise</summary><p>${notes.join(" ")}</p></details>`;
+  html += `<button type="button" class="tab primary" id="cSave">Quote merken</button>`;
   box.innerHTML = html;
   $("#cSave").addEventListener("click", () => {
     const list = savedQuotes().filter((q) => !(q.game === g.id && q.market === c.market && q.sel === c.sel && q.player === c.player && q.line === c.line));
@@ -507,17 +581,17 @@ function clvOf(q) {
 function clvLog() { try { const l = JSON.parse(store.get("nbi-clv", "[]")); return Array.isArray(l) ? l : []; } catch { return []; } }
 function clvCard() {
   const log = clvLog();
-  if (!log.length) return `<section class="card"><h3>Dein Closing Line Value</h3><p class="muted" style="margin:0">Noch keine Schlussquoten eingetragen. Tippe bei einer gemerkten Quote auf „CLV“ und trage kurz vor Spielbeginn die dann aktuelle Quote ein. Über viele Wetten zeigt der Durchschnitt, ob du regelmäßig bessere Quoten bekommst als der Markt am Ende.</p></section>`;
+  if (!log.length) return `<section class="card"><h3>Closing Line Value</h3><p class="muted" style="margin:0">Noch keine Schlussquoten. Tippe bei einer gemerkten Quote auf „CLV“ und trage kurz vor Spielbeginn die aktuelle Quote ein.</p></section>`;
   const avg = log.reduce((a, r) => a + r.clv, 0) / log.length, pos = log.filter((r) => r.clv > 0).length;
-  const rows = log.slice().reverse().slice(0, 30).map((r) => `<div class="row between"><span>${esc(r.label)}<span class="muted"> · ${esc(r.game)} · ${r.date.slice(8)}.${r.date.slice(5, 7)}. · ${dec(r.price)} → ${dec(r.close)}</span></span><span class="row" style="gap:6px"><span class="num" style="color:var(${r.clv > 0 ? "--good" : r.clv < 0 ? "--bad" : "--ink-2"})">${spct(r.clv)}</span><button type="button" class="tipdel" style="border:none;padding:0 4px" data-clvdel="${r.ts}" aria-label="Eintrag löschen">✕</button></span></div>`).join("");
-  return `<section class="card"><h3>Dein Closing Line Value</h3>
+  const rows = log.slice().reverse().slice(0, 30).map((r) => `<div class="row between"><span style="min-width:0">${esc(r.label)}<span class="muted"> · ${r.date.slice(8)}.${r.date.slice(5, 7)}. · ${dec(r.price)} → ${dec(r.close)}</span></span><span class="row" style="gap:8px"><span class="num" style="color:var(${r.clv > 0 ? "--good" : r.clv < 0 ? "--bad" : "--ink-2"})">${spct(r.clv)}</span><button type="button" class="act" style="border:none;padding:0 2px" data-clvdel="${r.ts}" aria-label="Eintrag löschen">✕</button></span></div>`).join("");
+  return `<section class="card"><h3>Closing Line Value</h3>
     <div class="kpis">
-      <div class="kpi"><div class="k">Ø CLV</div><div class="v num">${spct(avg)}</div><div class="s">${avg > 0 ? "besser als Schlussquote" : "schlechter als Schlussquote"}</div></div>
-      <div class="kpi"><div class="k">Positiv</div><div class="v num">${pos} / ${log.length}</div><div class="s num">${pct(pos / log.length, 0)}</div></div>
-      <div class="kpi"><div class="k">Wetten</div><div class="v num">${log.length}</div><div class="s">${log.length < 50 ? "noch wenig aussagekräftig" : "mit Schlussquote"}</div></div>
+      <div class="kpi"><div class="k">Ø CLV</div><div class="v num" style="color:var(${avg > 0 ? "--good" : "--bad"})">${spct(avg)}</div></div>
+      <div class="kpi"><div class="k">Positiv</div><div class="v num">${pos}/${log.length}</div></div>
+      <div class="kpi"><div class="k">Wetten</div><div class="v num">${log.length}</div><div class="s">${log.length < 50 ? "noch wenige" : ""}</div></div>
     </div>
-    <p class="muted" style="margin:0">CLV = deine Quote im Vergleich zur Schlussquote. Mit Gegenquote wird die Buchmacher-Marge herausgerechnet, sonst gilt das einfache Verhältnis. Nur vergleichbar, wenn die Linie gleich geblieben ist. Die Liste liegt nur auf diesem Gerät.</p>
-    <details><summary>Einträge</summary><div class="inj" style="margin-top:8px">${rows}</div></details></section>`;
+    <details class="more"><summary>Einträge</summary><div class="inj" style="margin-top:10px">${rows}</div></details>
+    <details class="hint"><summary>So funktioniert's</summary><p>CLV vergleicht deine Quote mit der Schlussquote kurz vor Spielbeginn. Mit Gegenquote wird die Buchmacher-Marge herausgerechnet. Nur vergleichbar, wenn die Linie gleich geblieben ist. Über viele Wetten ist ein positiver Durchschnitt das beste Zeichen für einen echten Vorteil. Die Liste liegt nur auf diesem Gerät.</p></details></section>`;
 }
 
 function savedQuotes() {
@@ -543,22 +617,20 @@ function trackCard() {
   const T = D.suggestions?.track;
   if (!T) return "";
   const live = T.by_market.points, bt = T.backtest?.markets ?? {}, bp = bt.points;
-  const btN = bp?.n ?? 0, btH = bp?.hits ?? 0, btE = bp?.expected ?? null;
   const rows = (T.markets ?? Object.keys(T.by_market)).map((m) => { const l = T.by_market[m], b = bt[m];
-    return `<tr><td>${MARKETS[m]}</td><td class="num">${l.n ? `${l.hits}/${l.n}` : "–"}</td><td class="num">${pct(l.hit_rate, 0)}</td><td class="num">${pct(l.expected, 0)}</td><td class="num">${b ? `${pct(b.hit_rate, 0)} / ${pct(b.expected, 0)}` : "–"}</td></tr>`; }).join("");
+    return `<tr><td>${MARKETS[m]}</td><td>${l.n ? `${l.hits}/${l.n}` : "–"}</td><td>${pct(l.hit_rate, 0)}</td><td>${pct(l.expected, 0)}</td><td>${b ? `${pct(b.hit_rate, 0)} / ${pct(b.expected, 0)}` : "–"}</td></tr>`; }).join("");
   const recent = T.recent.slice(0, 12).map((r) => `<div class="row between"><span>${r.status === "won" ? "✓" : "✗"} ${esc(r.name)} · ${MARKETS[r.market]} ${({ over: "Over", under: "Under", yes: "Ja", no: "Nein" })[r.sel]}${r.line == null ? "" : " " + dec(r.line, 1)}</span><span class="num muted">${YESNO.includes(r.market) ? "" : dec(r.actual, 0)}</span></div>`).join("");
-  return `<section class="card"><h3>Trefferquote der Punkte-Tipps</h3>
+  return `<section class="card"><h3>Trefferquote der Tipps</h3>
     <div class="kpis">
-      <div class="kpi"><div class="k">Seit Start</div><div class="v num">${live.n ? pct(live.hit_rate, 0) : "–"}</div><div class="s num">${live.n ? `${live.hits} von ${live.n}` : "noch keine Ergebnisse"}</div></div>
+      <div class="kpi"><div class="k">Punkte live</div><div class="v num">${live.n ? pct(live.hit_rate, 0) : "–"}</div><div class="s num">${live.n ? `${live.hits} von ${live.n}` : "noch keine"}</div></div>
       <div class="kpi"><div class="k">Erwartet</div><div class="v num">${live.n ? pct(live.expected, 0) : "–"}</div><div class="s">laut Modell</div></div>
-      <div class="kpi"><div class="k">Rückrechnung</div><div class="v num">${btN ? pct(btH / btN, 1) : "–"}</div><div class="s num">${btN ? `erwartet ${pct(btE, 1)}` : ""}</div></div>
+      <div class="kpi"><div class="k">Im Test</div><div class="v num">${bp ? pct(bp.hit_rate, 0) : "–"}</div><div class="s num">${bp ? `Soll ${pct(bp.expected, 0)}` : ""}</div></div>
     </div>
-    <p class="muted" style="margin:0">Gezählt wird, ob die Wette wie angezeigt eingetreten wäre (bei Punkten an der genannten Linie). Das ist die Treffsicherheit des Modells, nicht dein Gewinn: Der hängt von Linie und Quote deines Buchmachers ab. Spieler ohne Einsatz zählen nicht.${btN ? ` Rückrechnung: dieselbe Regel auf ${btN.toLocaleString("de-DE")} Fälle aus ${T.backtest.period?.start?.slice(0, 7) ?? ""} bis ${T.backtest.period?.end?.slice(0, 7) ?? ""}, die das Modell beim Training nicht kannte.` : ""}</p>
-    <details><summary>Alle Märkte und letzte Ergebnisse</summary>
-      <div class="tablewrap" style="margin-top:8px"><table><thead><tr><th>Markt</th><th>Treffer</th><th>Quote</th><th>Erwartet</th><th>Rückrechnung</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="muted">Rückrechnung: Trefferquote / erwartete Quote derselben Regel in den Testsaisons. Double-Double und Triple-Double sind „Ja“-Tipps mit niedriger Wahrscheinlichkeit; entscheidend ist dort, ob Trefferquote und Erwartung zusammenpassen. Aus Rückrechnung und laufenden Ergebnissen lernt die App je Markt eine Korrektur; die angezeigten Wahrscheinlichkeiten und „lohnt ab“-Quoten sind bereits angepasst. Sieger-Wetten: ${T.moneyline.n ? `${T.moneyline.hits} von ${T.moneyline.n} Favoriten haben gewonnen (erwartet ${pct(T.moneyline.expected, 0)}).` : "noch keine Ergebnisse."}</p>
-      <div class="inj">${recent || `<div class="muted">Die ersten Ergebnisse erscheinen nach dem nächsten Update, sobald Spiele beendet sind.</div>`}</div>
-    </details></section>`;
+    <details class="more"><summary>Alle Märkte und letzte Ergebnisse</summary>
+      <div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Markt</th><th>Treffer</th><th>Quote</th><th>Erwartet</th><th>Rückrechnung</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="inj" style="margin-top:10px">${recent || `<div class="muted">Die ersten Ergebnisse erscheinen, sobald Spiele beendet sind.</div>`}</div>
+    </details>
+    <details class="hint"><summary>So funktioniert's</summary><p>Jeder Vorschlag wird gespeichert und nach dem Spiel abgerechnet: Wäre die Wette wie angezeigt eingetreten? Das misst die Treffsicherheit des Modells, nicht deinen Gewinn. Spieler ohne Einsatz zählen nicht. Rückrechnung: dieselbe Regel an Spielen, die das Modell nicht kannte. Aus beidem lernt die App je Markt eine Korrektur; die angezeigten Wahrscheinlichkeiten sind bereits angepasst.${T.moneyline.n ? ` Sieger-Favoriten: ${T.moneyline.hits} von ${T.moneyline.n} gewonnen (erwartet ${pct(T.moneyline.expected, 0)}).` : ""}</p></details></section>`;
 }
 
 function openCalc(gid, c) {
@@ -569,55 +641,58 @@ function openCalc(gid, c) {
 
 function renderTips() {
   const days = [...new Set(D.games.map(gameDay))].sort();
-  const dayTabs = days.map((d) => `<button class="tab" data-day="${d}" aria-pressed="${d === day}">${esc(dayLabel(d))}</button>`).join("");
   const saved = savedQuotes().map((q) => { const g = D.games.find((x) => x.id === q.game); return { q, g, a: assess(g, q) }; })
     .filter((x) => x.a && x.a.ev != null).sort((x, y) => (y.a.tone === "good") - (x.a.tone === "good") || y.a.ev - x.a.ev);
-  const savedHtml = saved.length ? saved.map(({ q, g, a }, i) => { const cv = clvOf(q); return `<div class="tipwrap"><div class="tip">
-      <button type="button" class="tipmain" data-saved="${i}">
-        <div><div class="tipname">${esc(selLabel(g, q))}</div><div class="muted">${g.away} @ ${g.home} · ${fmtTime(g.tip)} Uhr · Quote ${dec(q.price)}${q.closePrice ? ` · Schluss ${dec(q.closePrice)}` : ""}</div></div>
-        <div class="tipright"><span class="verdictchip ${a.tone}"><span class="dot ${a.tone}"></span>${a.word}</span><div class="num">EV ${spct(a.ev)}</div>${cv ? `<div class="num" style="color:var(${cv.v > 0 ? "--good" : cv.v < 0 ? "--bad" : "--ink-2"})">CLV ${spct(cv.v)}</div>` : `<div class="muted num">${a.ev > 0 && !a.noStake ? "Einsatz " + eur(a.st.amount) : ""}</div>`}</div>
-      </button><button type="button" class="tipdel" data-clv="${i}" aria-expanded="${clvOpen === q.ts}">CLV</button><button type="button" class="tipdel" data-del="${i}" aria-label="Entfernen">✕</button></div>
+  const savedHtml = saved.length ? `<div class="list">${saved.map(({ q, g, a }, i) => { const cv = clvOf(q); return `<div class="saved">
+      <div class="saved-row">
+        <button type="button" class="item" data-saved="${i}">
+          <div class="item-main"><div class="item-title">${esc(selLabel(g, q))}</div>
+            <div class="item-meta num">${g.away} @ ${g.home} · ${fmtTime(g.tip)} · Quote ${dec(q.price)}${q.closePrice ? ` → ${dec(q.closePrice)}` : ""}</div></div>
+          <div class="item-side"><span class="pill ${a.tone}">${a.word}</span><span class="num minq">EV <b>${spct(a.ev)}</b></span>${cv ? `<span class="num minq">CLV <b style="color:var(${cv.v > 0 ? "--good" : cv.v < 0 ? "--bad" : "--ink"})">${spct(cv.v)}</b></span>` : a.ev > 0 && !a.noStake ? `<span class="num minq">Einsatz <b>${eur(a.st.amount)}</b></span>` : ""}</div>
+        </button>
+        <button type="button" class="act clv" data-clv="${i}" aria-expanded="${clvOpen === q.ts}">CLV</button>
+        <button type="button" class="act" data-del="${i}" aria-label="Entfernen">✕</button>
+      </div>
       ${clvOpen === q.ts ? `<div class="clvform">
-        <div class="muted">Schlussquote: die Quote für dieselbe Wette und dieselbe Linie kurz vor Spielbeginn.</div>
+        <div class="muted">Quote für dieselbe Wette und Linie kurz vor Spielbeginn.</div>
         <div class="form">
           <label>Schlussquote<input id="clvPrice" inputmode="decimal" autocomplete="off" value="${q.closePrice ? dec(q.closePrice) : ""}" placeholder="z. B. 1,80"></label>
           ${threeWay(q.market) ? "" : `<label>Gegenseite (optional)<input id="clvOpp" inputmode="decimal" autocomplete="off" value="${q.closeOpp ? dec(q.closeOpp) : ""}" placeholder="z. B. 2,00"></label>`}
         </div>
-        <button type="button" class="tab" data-clvsave="${i}">Speichern</button></div>` : ""}</div>`; }).join("")
-    : `<div class="muted">Noch keine Quoten gemerkt. Tippe unten einen Kandidaten an, trage die Quote deines Buchmachers ein und wähle „Quote merken“.</div>`;
+        <button type="button" class="tab primary" data-clvsave="${i}">Speichern</button></div>` : ""}</div>`; }).join("")}</div>` : "";
   const cand = candidates(day);
-  const candRow = (c) => `<button type="button" class="tip tipmain" data-cand="${cand.indexOf(c)}">
-      <div><div class="tipname">${esc(c.pl.name)} <span class="muted">${c.pl.team}</span></div>
-        <div class="num">${MARKETS[c.market]} <b>${selName(c.g, c.sel)}${c.line == null ? "" : " " + dec(c.line, 1)}</b></div>
-        <div class="muted num">${c.market === "points" ? `Modell ${dec(c.mu, 1)} · Schnitt letzte 10: ${dec(c.avg, 1)} · ` : `Modell: ${dec(c.pl.d.points?.mu, 0)} Pkt, ${dec(c.pl.d.rebounds?.mu, 0)} Reb, ${dec(c.pl.d.assists?.mu, 0)} Ast · `}${c.g.away} @ ${c.g.home} ${fmtTime(c.g.tip)}</div></div>
-      <div class="tipright"><div class="num"><b>${pct(c.p, 0)}</b></div><div class="muted">lohnt ab</div><div class="num"><b>${dec(c.minPrice)}</b></div></div>
+  const candRow = (c) => `<button type="button" class="item" data-cand="${cand.indexOf(c)}">
+      <div class="item-main">
+        <div class="item-title">${esc(c.pl.name)}<span class="team">${c.pl.team}</span></div>
+        <div class="item-bet">${MARKETS[c.market]} <strong>${selName(c.g, c.sel)}${c.line == null ? "" : " " + dec(c.line, 1)}</strong></div>
+        <div class="item-meta num">${c.market === "points" ? `Modell ${dec(c.mu, 1)} · Ø10 ${dec(c.avg, 1)}` : `${dec(c.pl.d.points?.mu, 0)} Pkt · ${dec(c.pl.d.rebounds?.mu, 0)} Reb · ${dec(c.pl.d.assists?.mu, 0)} Ast`} · ${c.g.away} @ ${c.g.home} ${fmtTime(c.g.tip)}</div>
+      </div>
+      <div class="item-side"><span class="pbig num">${pctBig(c.p)}</span>${meter(c.p)}<span class="minq num">ab <b>${dec(c.minPrice)}</b></span></div>
     </button>`;
-  const none = `<div class="muted">Für diesen Tag gibt es keine klaren Kandidaten (oder die Spiele haben begonnen).</div>`;
-  const section = (m) => cand.filter((c) => c.market === m).map(candRow).join("") || none;
+  const section = (m, title, hint) => {
+    const rows = cand.filter((c) => c.market === m);
+    return `<div class="section"><div class="sec-head"><h2>${title}</h2><span class="count">${rows.length}</span></div>
+      ${rows.length ? `<div class="list">${rows.map(candRow).join("")}</div>` : `<div class="list"><div class="empty">Keine klaren Kandidaten an diesem Tag.</div></div>`}
+      <details class="hint"><summary>So funktioniert's</summary><p>${hint}</p></details></div>`;
+  };
   const ml = D.games.filter((g) => gameDay(g) === day && !started(g) && g.model && g.model.on).map((g) => {
     const p = homeProb(g), fav = p >= 0.5, pf = fav ? p : 1 - p;
-    return `<button type="button" class="tip tipmain" data-ml="${g.id}" data-sel="${fav ? "home" : "away"}">
-      <div><div class="tipname">${fav ? g.home : g.away} gewinnt</div><div class="muted">${g.away} @ ${g.home} · ${fmtTime(g.tip)} Uhr</div></div>
-      <div class="tipright"><div class="num"><b>${pct(pf, 0)}</b></div><div class="muted">lohnt ab</div><div class="num"><b>${pf - D.settings.minEdge > 0.02 ? dec(1 / (pf - D.settings.minEdge) / (1 - tax())) : "–"}</b></div></div></button>`;
+    return `<button type="button" class="item" data-ml="${g.id}" data-sel="${fav ? "home" : "away"}">
+      <div class="item-main"><div class="item-title">${fav ? g.home : g.away} gewinnt</div><div class="item-meta num">${g.away} @ ${g.home} · ${fmtTime(g.tip)}</div></div>
+      <div class="item-side"><span class="pbig num">${pctBig(pf)}</span>${meter(pf)}<span class="minq num">ab <b>${pf - D.settings.minEdge > 0.02 ? dec(1 / (pf - D.settings.minEdge) / (1 - tax())) : "–"}</b></span></div></button>`;
   }).join("");
-  $("#view").innerHTML = `<div style="display:grid;gap:12px">
-    <div class="tabs" role="group" aria-label="Spieltag">${dayTabs}</div>
-    <section class="card"><h3>Deine gemerkten Quoten</h3><div class="tips">${savedHtml}</div></section>
-    ${clvCard()}
-    <section class="card"><h3>Kandidaten: Punkte</h3>
-      <p class="muted" style="margin:0">Hier weicht das Modell am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Eine Wette lohnt nur, wenn dein Buchmacher <b>diese Linie</b> mindestens zur Quote „lohnt ab“ anbietet. Bei anderer Linie antippen und im Rechner prüfen.</p>
-      <div class="tips">${section("points")}</div></section>
-    <section class="card"><h3>Kandidaten: Double-Double</h3>
-      <p class="muted" style="margin:0">Wahrscheinlichkeit, dass der Spieler in mindestens zwei von Punkten, Rebounds und Assists zweistellig wird. Lohnt, wenn die Quote für „Ja“ mindestens „lohnt ab“ beträgt.</p>
-      <div class="tips">${section("dd")}</div></section>
-    <section class="card"><h3>Kandidaten: Triple-Double</h3>
-      <p class="muted" style="margin:0">Selten und entsprechend hoch quotiert. Gelistet ab ${pct(0.08, 0)} Wahrscheinlichkeit für „Ja“.</p>
-      <div class="tips">${section("td")}</div></section>
-    <p class="muted" style="margin:0">Alle Kandidaten werden gespeichert und nach dem Spiel ausgewertet (Trefferquote unten).</p>
-    <section class="card"><h3>Sieger-Wetten</h3>
-      <p class="muted" style="margin:0">Bei Sieger-Wetten ist das Modell im Test nicht besser als eine einfache Stärke-Rangliste. Mit Vorsicht nutzen.</p>
-      <div class="tips">${ml || `<div class="muted">Keine offenen Spiele.</div>`}</div></section>
-    ${trackCard()}</div>`;
+  $("#view").innerHTML = `<div style="display:grid;gap:22px">
+    ${dayPills(days)}
+    ${saved.length ? `<div class="section"><div class="sec-head"><h2>Gemerkte Quoten</h2><span class="count">${saved.length}</span></div>${savedHtml}</div>` : ""}
+    ${section("points", "Punkte", "Hier weicht das Modell am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Die Prozentzahl ist die Wahrscheinlichkeit für die genannte Seite. Lohnt nur, wenn dein Buchmacher diese Linie mindestens zur Quote „ab“ anbietet. Andere Linie? Antippen und im Rechner prüfen.")}
+    ${section("dd", "Double-Double", "Wahrscheinlichkeit, dass der Spieler in mindestens zwei von Punkten, Rebounds und Assists zweistellig wird. Lohnt, wenn die Quote für „Ja“ mindestens „ab“ beträgt.")}
+    ${section("td", "Triple-Double", "Selten und entsprechend hoch quotiert. Gelistet ab 8 % Wahrscheinlichkeit für „Ja“.")}
+    <div class="section"><div class="sec-head"><h2>Sieger</h2><span class="count">${D.games.filter((g) => gameDay(g) === day && !started(g) && g.model && g.model.on).length}</span></div>
+      ${ml ? `<div class="list">${ml}</div>` : `<div class="list"><div class="empty">Keine offenen Spiele.</div></div>`}
+      <details class="hint"><summary>So funktioniert's</summary><p>Favorit des Modells je Spiel. Bei Sieger-Wetten war das Modell im Test nicht besser als eine einfache Stärke-Rangliste; mit Vorsicht nutzen.</p></details></div>
+    <div class="section"><div class="sec-head"><h2>Bilanz</h2></div>${trackCard()}${clvCard()}</div>
+    ${saved.length ? "" : `<p class="muted" style="margin:0;padding-inline:4px">Tipp: Kandidat antippen, Quote deines Buchmachers eintragen und „Quote merken“ wählen. Gemerkte Quoten erscheinen dann oben mit Urteil und Einsatz.</p>`}
+  </div>`;
   document.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { day = b.dataset.day; store.set("nbi-day", day); renderTips(); }));
   document.querySelectorAll("[data-cand]").forEach((b) => b.addEventListener("click", () => { const c = cand[+b.dataset.cand]; openCalc(c.g.id, { market: c.market, sel: c.sel, player: c.pl.id, line: c.line }); }));
   document.querySelectorAll("[data-saved]").forEach((b) => b.addEventListener("click", () => { const { q, g } = saved[+b.dataset.saved]; openCalc(g.id, q); }));
@@ -657,7 +732,7 @@ function distChart(d, line, sel) {
   const lx = line == null ? null : (line + 0.5) * bw;
   return `<div class="dist"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Wahrscheinlichkeitsverteilung, Erwartung ${dec(d.mu, 1)}">${bars}${labels}${
     lx == null ? "" : `<line x1="${lx}" x2="${lx}" y1="${top}" y2="${bottom}" stroke="var(--ink-2)" stroke-dasharray="3 3"/>`}</svg>
-    <div class="muted num">Erwartung ${dec(d.mu, 1)} · 80 % zwischen ${M.nbQuantile(0.1, d.mu, d.alpha)} und ${M.nbQuantile(0.9, d.mu, d.alpha)} · gedämpfte Balken: Wette verliert</div></div>`;
+    <div class="muted num">Erwartung ${dec(d.mu, 1)} · 80 % zwischen ${M.nbQuantile(0.1, d.mu, d.alpha)} und ${M.nbQuantile(0.9, d.mu, d.alpha)} · blasse Balken: Wette verliert</div></div>`;
 }
 
 load();
