@@ -95,3 +95,47 @@ def test_api_endpoints(trained):
     assert c.get("/api/bets").json()["bankroll"] == 995.0
     assert c.get("/api/overview").json()["bankroll"]["open_bets"] == 1
     assert c.get("/api/value-bets").json()["candidates"] == []
+
+
+def test_odds_payload_to_value_bets_and_paper_bet(trained):
+    """The Odds API payload format -> stored snapshots -> value candidates -> paper bet at the stored price."""
+    from datetime import timedelta
+    from app.betting import paper
+    from app.betting.value import find_value_bets
+    from app.db import Game, OddsSnapshot, Prediction, utcnow
+    from app.ingest.pipeline import store_event_rows
+    from app.teams import NAME_OF
+    db = trained
+    tip = (utcnow() + timedelta(hours=5)).replace(microsecond=0)
+    for g in db.query(Game).filter(Game.status != "final"):
+        g.tip_utc, g.date = tip, tip.replace(tzinfo=None).date()
+    predict_mod.predict_upcoming(db)
+    db.query(Prediction).update({"data_quality": 0.9, "enabled": True})  # synthetic league has no injury report
+    g = db.query(Game).filter(Game.status != "final").first()
+    g.date = (tip - timedelta(hours=5)).date()  # US-Eastern game date of a tip-off 5 hours earlier than UTC
+    p = db.query(Prediction).filter_by(game_id=g.id, market="points", is_latest=True).order_by(Prediction.mean.desc()).first()
+    from app.db import Player
+    name = db.get(Player, p.player_id).name
+    line = round(p.mean) - 2.5
+    ev = {"id": "evt1", "commence_time": tip.isoformat() + "Z", "home_team": NAME_OF[g.home_id], "away_team": NAME_OF[g.away_id],
+          "bookmakers": [{"key": bk, "last_update": utcnow().isoformat() + "Z", "markets": [
+              {"key": "h2h", "outcomes": [{"name": NAME_OF[g.home_id], "price": 1.9 + d}, {"name": NAME_OF[g.away_id], "price": 1.9 - d}]},
+              {"key": "player_points", "outcomes": [{"name": "Over", "description": name, "price": 1.9 + d, "point": line},
+                                                    {"name": "Under", "description": name, "price": 1.9 - d, "point": line}]}]}
+              for bk, d in (("book_a", 0.0), ("book_b", 0.04))]}
+    from zoneinfo import ZoneInfo
+    g.date = tip.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/New_York")).date()
+    db.flush()
+    assert store_event_rows(db, ev, utcnow()) == 8
+    assert store_event_rows(db, ev, tip + timedelta(minutes=1)) == 0  # in-play prices are never stored as pre-game odds
+    snap = db.query(OddsSnapshot).filter_by(market="points").first()
+    assert snap.game_id == g.id and snap.player_id == p.player_id  # event and player were matched to our ids
+    cands = find_value_bets(db)
+    over = next(c for c in cands if c["market"] == "points" and c["selection"] == "over")
+    assert over["bookmaker"] == "book_b" and over["price"] == pytest.approx(1.94) and over["n_books"] == 2
+    assert over["ev"] == pytest.approx(over["p_win"] * 1.94 + over["p_push"] - 1, abs=1e-4)
+    assert {c["market"] for c in cands} == {"points", "moneyline"}
+    best = next((c for c in cands if c["ev"] > 0 and not any("disabled" in r for r in c["fail_reasons"])), None)
+    assert best is not None
+    bet = paper.place_bet(db, [{k: best[k] for k in ("game_id", "market", "player_id", "selection", "line", "bookmaker")}], stake=2)
+    assert bet.price == best["price"] and bet.legs[0]["bookmaker"] == best["bookmaker"]

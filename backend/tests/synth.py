@@ -23,7 +23,7 @@ def populate(db, *, n_days: int = 60, start: date = date(2024, 10, 22), season: 
         for i in range(players_per_team):
             pid = f"{t.lower()}p{i:02d}"
             if db.get(Player, pid) is None:
-                db.add(Player(id=pid, name=f"{t} Player{i}", norm_name=f"{t.lower()}player{i}"))
+                db.add(Player(id=pid, name=f"{t} Player{chr(97 + i)}", norm_name=f"{t.lower()}player{chr(97 + i)}"))
             roster[t].append((pid, max(8.0, 36 - 3.2 * i), 0.3 + 0.5 * rng.random(), 0.1 + 0.2 * rng.random(), 0.05 + 0.2 * rng.random()))
     db.flush()
     ids = []

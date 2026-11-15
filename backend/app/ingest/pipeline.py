@@ -6,12 +6,12 @@ from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import (ApiUsage, Game, GameInactive, InjuryEntry, InjuryReport, OddsEvent, OddsSnapshot, Player,
-                    PlayerGameStat, SourceStatus, Team, TeamGameStat, utcnow)
+                    PlayerGameStat, Prediction, SourceStatus, Team, TeamGameStat, utcnow)
 from app.sources import bref, injuries, odds_api
 from app.sources.http import SourceError
 from app.teams import BY_NAME, TEAMS, norm_last_first, norm_name
@@ -149,13 +149,15 @@ def ingest_season(db: Session, end_year: int, *, live: bool = False, cached_only
         ids = {g["game_id"] for g in sched}
         for gid, row in existing.items():
             if gid not in ids and row.status != "final":
+                db.execute(delete(Prediction).where(Prediction.game_id == gid))
+                db.execute(update(OddsEvent).where(OddsEvent.game_id == gid).values(game_id=None))
                 db.delete(row)
         detail.update({f"season_{end_year}": {"games": len(sched), "new_boxscores": loaded, "failed": failed}})
         return detail[f"season_{end_year}"]
 
 
 # ------------------------------------------------------------------ injuries
-def match_player(db: Session, name_norm: str, team_id: str | None, cache: dict | None = None) -> str | None:
+def match_player(db: Session, name_norm: str, team_id: str | list[str] | None) -> str | None:
     """Resolve a normalised name to a player id, preferring players who recently appeared for the team."""
     cands = list(db.scalars(select(Player.id).where(Player.norm_name == name_norm)))
     if not cands:
@@ -164,7 +166,7 @@ def match_player(db: Session, name_norm: str, team_id: str | None, cache: dict |
         return cands[0]
     best = db.execute(
         select(PlayerGameStat.player_id, func.max(PlayerGameStat.game_id)).where(PlayerGameStat.player_id.in_(cands))
-        .where(PlayerGameStat.team_id == team_id if team_id else True).group_by(PlayerGameStat.player_id)
+        .where(PlayerGameStat.team_id.in_([team_id] if isinstance(team_id, str) else team_id) if team_id else True).group_by(PlayerGameStat.player_id)
         .order_by(func.max(PlayerGameStat.game_id).desc())).first()
     return best[0] if best else None
 
@@ -233,12 +235,13 @@ def store_event_rows(db: Session, ev: dict, fetched_at: datetime, *, historical:
     if fetched_at >= commence:
         return 0  # never store in-play prices as pre-game odds
     pid_cache: dict[str, str | None] = {}
+    teams = [t for t in (BY_NAME.get(ev["home_team"]), BY_NAME.get(ev["away_team"])) if t] or None
     for r in rows:
         pid = None
         if r["player_name"]:
             key = norm_name(r["player_name"])
             if key not in pid_cache:
-                pid_cache[key] = match_player(db, key, None)
+                pid_cache[key] = match_player(db, key, teams)
             pid = pid_cache[key]
         db.add(OddsSnapshot(fetched_at=fetched_at, historical=historical, event_id=ev["id"], game_id=oe.game_id,
                             bookmaker=r["bookmaker"], market=r["market"], player_id=pid, player_name=r["player_name"],

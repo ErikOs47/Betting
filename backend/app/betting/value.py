@@ -70,7 +70,8 @@ def build_candidates(quotes: pd.DataFrame, preds: dict, filters: dict, calib: di
     out: list[dict] = []
     for _, grp in f.groupby("_m", sort=False):
         best = grp.loc[grp["price"].idxmax()]
-        pred = preds.get((best["game_id"], PRED_MARKET.get(best["market"], best["market"]), best["player_id"]))
+        pid = best["player_id"] if isinstance(best["player_id"], str) else None  # pandas turns missing ids into NaN
+        pred = preds.get((best["game_id"], PRED_MARKET.get(best["market"], best["market"]), pid))
         if pred is None:
             continue
         line = None if best["market"] == "moneyline" else float(best["line"])
@@ -101,8 +102,8 @@ def build_candidates(quotes: pd.DataFrame, preds: dict, filters: dict, calib: di
         if best.get("stale", False):
             fails.append("odds stale")
         out.append({
-            "game_id": best["game_id"], "market": best["market"], "player_id": best["player_id"],
-            "player_name": best.get("player_name"), "selection": best["selection"], "line": line,
+            "game_id": best["game_id"], "market": best["market"], "player_id": pid,
+            "player_name": best.get("player_name") if pid else None, "selection": best["selection"], "line": line,
             "bookmaker": best["bookmaker"], "price": float(best["price"]), "fetched_at": best.get("fetched_at"),
             "model_prob": round(pr["p"], 5), "p_win": round(pr["win"], 5), "p_push": round(pr["push"], 5),
             "p_primary": round(pr["p_primary"], 5), "p_alt": None if pr["p_alt"] is None else round(pr["p_alt"], 5),
