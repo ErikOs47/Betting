@@ -3,14 +3,14 @@ import type { ReactNode } from "react";
 
 export function Card({ title, children, right, className = "" }: { title?: ReactNode; children: ReactNode; right?: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-xl border border-line bg-surface ${className}`}>
+    <section className={`min-w-0 rounded-xl border border-line bg-surface ${className}`}>
       {(title || right) && (
         <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 className="text-sm font-semibold text-ink">{title}</h2>
           {right}
         </header>
       )}
-      <div className="p-4">{children}</div>
+      <div className="p-3 sm:p-4">{children}</div>
     </section>
   );
 }
@@ -18,9 +18,9 @@ export function Card({ title, children, right, className = "" }: { title?: React
 export function Stat({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: "good" | "bad" }) {
   const mark = tone === "good" ? "▲" : tone === "bad" ? "▼" : "";
   return (
-    <div className="rounded-xl border border-line bg-surface p-4">
-      <div className="text-xs uppercase tracking-wide text-ink-3">{label}</div>
-      <div className="num mt-1 text-2xl font-semibold text-ink">
+    <div className="min-w-0 rounded-xl border border-line bg-surface p-3 sm:p-4">
+      <div className="text-[0.68rem] uppercase tracking-wide text-ink-3 sm:text-xs">{label}</div>
+      <div className="num mt-1 text-xl font-semibold text-ink sm:text-2xl">
         {mark && <span className={`mr-1 text-sm ${tone === "good" ? "text-good" : "text-bad"}`} aria-hidden>{mark}</span>}
         {value}
       </div>
@@ -74,17 +74,28 @@ export function State({ loading, error, empty, children }: { loading?: boolean; 
 }
 
 export function Scroll({ children }: { children: ReactNode }) {
-  return <div className="-mx-4 overflow-x-auto px-4">{children}</div>;
+  return <div className="-mx-3 overflow-x-auto px-3 sm:-mx-4 sm:px-4">{children}</div>;
 }
 
 export function PageTitle({ title, sub, right }: { title: string; sub?: ReactNode; right?: ReactNode }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold text-ink">{title}</h1>
-        {sub && <p className="mt-1 max-w-3xl text-sm text-ink-3">{sub}</p>}
+    <div className="mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-5">
+      <div className="min-w-0">
+        <h1 className="text-lg font-semibold text-ink sm:text-xl">{title}</h1>
+        {sub && <p className="mt-1 hidden max-w-3xl text-sm text-ink-3 sm:block">{sub}</p>}
       </div>
       {right}
     </div>
   );
+}
+
+/** Phone layout: one tappable row per item instead of a wide table. Shown below the md breakpoint only. */
+export function MobileList({ children }: { children: ReactNode }) {
+  return <div className="-mx-3 divide-y divide-line md:hidden">{children}</div>;
+}
+export function DesktopOnly({ children }: { children: ReactNode }) {
+  return <div className="hidden md:block">{children}</div>;
+}
+export function KV({ k, v }: { k: ReactNode; v: ReactNode }) {
+  return <div className="min-w-0"><div className="text-[0.68rem] uppercase tracking-wide text-ink-3">{k}</div><div className="num truncate text-sm text-ink">{v}</div></div>;
 }

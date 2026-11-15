@@ -25,3 +25,12 @@ th { text-align: left; font-weight: 500; color: var(--color-ink-3); font-size: 0
 td { padding: 0.5rem 0.6rem; border-top: 1px solid var(--color-line); font-size: 0.85rem; }
 input, select { background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 6px; padding: 0.35rem 0.5rem; color: var(--color-ink); font-size: 0.85rem; }
 input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--color-s1); outline-offset: 1px; }
+
+/* Phones: 16px inputs stop iOS from zooming on focus; larger touch targets */
+@media (max-width: 767px) {
+  input, select { font-size: 16px; padding: 0.45rem 0.55rem; }
+  button { min-height: 2.5rem; }
+}
+.pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 0.25rem); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
