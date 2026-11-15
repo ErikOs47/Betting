@@ -101,6 +101,34 @@ damit Daten aktualisiert werden.
 
 ---
 
+### Muss der PC rund um die Uhr laufen?
+
+**Nein.** Die App holt beim Start alles nach, was sie verpasst hat:
+
+| Pause | Nachholen dauert ca. |
+|---|---|
+| 1 Tag | 1 Minute |
+| 1 Woche | 5 Minuten (inkl. Neu-Training) |
+| ganze Sommerpause | 10–15 Minuten |
+
+Danach aktualisiert sie, solange der PC läuft: Ergebnisse alle 30 min, Injury Report alle 15 min. Den Stand siehst du
+unter *Mehr → Datenquellen* (grün = aktuell).
+
+Einschränkungen:
+- **Nur einmal** muss der PC länger laufen: beim allerersten Start, ca. 4 Stunden für den Download von drei Saisons.
+  Unterbrechen ist kein Problem, der Download setzt beim nächsten Start fort.
+- Ist der PC aus oder im Standby, ist die App auch vom Handy aus **nicht erreichbar**.
+- **Strom:** Ein PC, der 24 Stunden durchläuft, kostet je nach Gerät grob 10–30 € Strom im Monat und damit mehr als
+  ein kleiner Mietserver. Sinnvoll ist daher: PC einschalten, wenn du die App nutzen willst, 5–10 Minuten warten.
+- **Timing:** NBA-Spiele beginnen meist zwischen 1 und 4:30 Uhr deutscher Zeit. Die wichtigen Verletzungs-Updates
+  kommen am Spieltag ab dem Nachmittag und bis kurz vor Spielbeginn. Wer am Abend wettet, sollte den PC also
+  abends ein paar Minuten vorher einschalten.
+
+Docker Desktop startet die App automatisch mit, wenn in Docker Desktop „Start Docker Desktop when you sign in“
+aktiviert ist; die Container selbst starten dank `restart: unless-stopped` von allein.
+
+---
+
 ## C. Nur im eigenen WLAN
 
 Schritte 1–2 wie bei B, dann auf dem Handy `http://IP-DES-PCS:3000` öffnen (IP des PCs: Windows `ipconfig`,

@@ -27,9 +27,21 @@ def _step(name: str, fn) -> dict:
 
 
 def refresh_results() -> dict:
-    from app.ingest.pipeline import ingest_season
+    """Load new results of the current season and catch up on anything missed while the machine was off,
+    including the end of a previous season (e.g. playoffs missed over the summer)."""
+    from app.ingest.pipeline import ingest_season, stale_months
     from app.ml.predict import today_et
-    return _step("results", lambda db: ingest_season(db, bref.season_end_year(today_et()), live=True))
+
+    def run(db):
+        today = today_et()
+        cur = bref.season_end_year(today)
+        missed = stale_months(db, today - timedelta(days=1))
+        out = {}
+        for season in sorted(s for s in missed if s != cur):
+            out[f"season_{season}"] = ingest_season(db, season, refresh_months=missed[season])
+        out[f"season_{cur}"] = ingest_season(db, cur, live=True, refresh_months=missed.get(cur))
+        return out
+    return _step("results", run)
 
 
 def refresh_injuries() -> dict:

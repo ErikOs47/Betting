@@ -21,7 +21,7 @@ BOOTSTRAP_SEASONS = 3
 MIN_FINAL_GAMES = 500  # below this the history is too short for the models
 
 # (job name, interval in minutes)
-EVERY = [("injuries", 15), ("odds", 10), ("results", 30)]
+EVERY = [("results", 30), ("injuries", 15), ("odds", 10)]  # on start: catch up results first
 state: dict = {"started": None, "bootstrap": None, "last": {}, "running": None}
 _thread: threading.Thread | None = None
 

@@ -201,3 +201,21 @@ def test_internal_scheduler_bootstrap_detection(db, monkeypatch):
         g.season = 2024
     db.commit()
     assert not scheduler.needs_bootstrap()
+
+
+def test_results_catch_up_after_pc_was_off(db, monkeypatch):
+    """Games missed while the machine was off - also from a previous season - are reloaded, months re-fetched."""
+    from app.db import Game
+    from app.ingest import pipeline
+    from app.ml import predict as pm
+    from app.tasks import jobs
+    populate(db, n_days=10, start=date(2025, 5, 20), season=2025)  # end of last season ...
+    for g in db.query(Game).filter(Game.date >= date(2025, 5, 27)):
+        g.status, g.home_pts, g.away_pts = "scheduled", None, None  # ... whose last days were never loaded
+    db.commit()
+    monkeypatch.setattr(pm, "today_et", lambda: date(2025, 11, 3))
+    assert pipeline.stale_months(db, date(2025, 11, 2)) == {2025: {"may"}}
+    calls = []
+    monkeypatch.setattr(pipeline, "ingest_season", lambda db, season, **kw: calls.append((season, kw)) or {"ok": True})
+    r = jobs.refresh_results()
+    assert r["ok"] and calls == [(2025, {"refresh_months": {"may"}}), (2026, {"live": True, "refresh_months": None})]

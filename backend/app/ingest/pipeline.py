@@ -101,7 +101,8 @@ def store_boxscore(db: Session, game: Game, box: dict) -> None:
     game.status = "final"
 
 
-def ingest_season(db: Session, end_year: int, *, live: bool = False, cached_only: bool = False, max_new: int | None = None) -> dict:
+def ingest_season(db: Session, end_year: int, *, live: bool = False, cached_only: bool = False, max_new: int | None = None,
+                  refresh_months: set[str] | None = None) -> dict:
     """Upsert the schedule and load all box scores that are not stored yet.
 
     live=True re-downloads the schedule pages around today (results and tip times change).
@@ -109,12 +110,12 @@ def ingest_season(db: Session, end_year: int, *, live: bool = False, cached_only
     """
     with track(db, "basketball-reference") as detail:
         sync_teams(db)
-        refresh = None
+        refresh = set(refresh_months or ())
         if live:
             today = datetime.now(ET).date()
-            refresh = {(today - timedelta(days=1)).strftime("%B").lower(), today.strftime("%B").lower(),
-                       (today + timedelta(days=7)).strftime("%B").lower()}
-        sched = bref.fetch_schedule(end_year, refresh_months=refresh)
+            refresh |= {(today - timedelta(days=1)).strftime("%B").lower(), today.strftime("%B").lower(),
+                        (today + timedelta(days=7)).strftime("%B").lower()}
+        sched = bref.fetch_schedule(end_year, refresh_months=refresh or None)
         if not sched:
             raise SourceError(f"empty schedule for season {end_year}")
         existing = {g.id: g for g in db.scalars(select(Game).where(Game.season == end_year))}
@@ -305,3 +306,11 @@ def ingest_historical_odds(db: Session, day: date, *, props: bool = False, minut
                 n += store_event_rows(db, p.get("data", {}), odds_api.parse_ts(p.get("timestamp")) or at, historical=True)
         detail.update({"historical_day": str(day), "historical_rows": n})
         return {"day": str(day), "rows": n}
+
+
+def stale_months(db: Session, before: date) -> dict[int, set[str]]:
+    """Seasons and schedule months that still contain unfinished games dated before `before` (missed results)."""
+    out: dict[int, set[str]] = {}
+    for season, d in db.execute(select(Game.season, Game.date).where(Game.status != "final", Game.date < before)):
+        out.setdefault(season, set()).add(d.strftime("%B").lower())
+    return out
