@@ -63,6 +63,10 @@
       const p = countProbs(d.mu, d.alpha, line);
       return sel === "over" ? { win: p.over, lose: p.under, push: p.push } : { win: p.under, lose: p.over, push: p.push };
     }
+    if (market === "dd" || market === "td") { // yes/no markets; d.p = probability of "yes"
+      const win = sel === "yes" ? d.p : 1 - d.p;
+      return { win, lose: 1 - win, push: 0 };
+    }
     if (market === "moneyline") {
       const ph = homeWinProb(d.mu, d.sigma_ml || d.sigma), win = sel === "home" ? ph : 1 - ph;
       return { win, lose: 1 - win, push: 0 };

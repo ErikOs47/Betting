@@ -69,6 +69,11 @@ def build(db: Session, days: int = 2) -> dict:
                 row["l10"] = {m: (None if f.get(k) is None else round(f[k], 1)) for m, k in
                               (("points", "p_pts_l10"), ("rebounds", "p_trb_l10"), ("assists", "p_ast_l10"),
                                ("threes", "p_fg3_l10"), ("pra", "p_pra_l10"))}
+        from app.betting import doubles
+        for row in players.values():
+            dbl = doubles.ensemble_from_dists(row["d"])
+            if dbl:
+                row["dd"], row["td"] = round(dbl[0], 4), round(dbl[1], 4)
         plist = sorted((r for r in players.values() if r.get("min", 0) >= MIN_PLAYER_MINUTES), key=lambda r: -r["min"])
         out_games.append({
             "id": g.id, "tip": _iso(g.tip_utc), "home": g.home_id, "away": g.away_id,

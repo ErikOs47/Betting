@@ -156,7 +156,12 @@ footer { color: var(--ink-3); font-size: 0.78rem; display: grid; gap: 6px; }
 <script>
 "use strict";
 const M = window.NBMath;
-const MARKETS = { moneyline: "Sieger", spread: "Handicap", total: "Gesamtpunkte", points: "Punkte", rebounds: "Rebounds", assists: "Assists", threes: "Dreier", pra: "PRA" };
+const MARKETS = { moneyline: "Sieger", spread: "Handicap", total: "Gesamtpunkte", points: "Punkte", dd: "Double-Double", td: "Triple-Double", rebounds: "Rebounds", assists: "Assists", threes: "Dreier", pra: "PRA" };
+const CALC_MARKETS = ["moneyline", "spread", "total", "points", "dd", "td"];  // what the bookmaker offers
+const YESNO = ["dd", "td"];
+const isPlayerMarket = (m) => M.PLAYER.includes(m) || YESNO.includes(m);
+const noLine = (m) => m === "moneyline" || YESNO.includes(m);
+const selName = (g, sel) => ({ home: g.home, away: g.away, over: "Over", under: "Under", yes: "Ja", no: "Nein" }[sel]);
 const SHORT = { points: "PTS", rebounds: "REB", assists: "AST", threes: "3P", pra: "PRA" };
 const FLAGS = { few_games: "wenige Spiele", returning_from_absence: "Rückkehr nach Pause", new_team: "neues Team", injury_report_stale: "Injury Report alt",
   questionable: "fraglich", probable: "wahrscheinlich dabei", low_minutes: "wenig Spielzeit", results_stale: "Ergebnisse fehlen" };
@@ -264,7 +269,7 @@ function renderList() {
 
 function defaultLine(g) {
   const m = calc.market;
-  if (m === "moneyline") return "";
+  if (noLine(m)) return "";
   if (m === "spread") { const mu = g.model.margin.mu; return String(-(Math.round(mu) + (mu >= 0 ? 0.5 : -0.5))).replace(".", ","); }
   if (m === "total") return String(Math.round(g.model.total.mu) + 0.5).replace(".", ",");
   const p = g.players.find((x) => x.id === calc.player), d = p?.d[m];
@@ -278,7 +283,7 @@ function renderGame(g) {
   const p = homeProb(g), m = g.model;
   const inj = (side) => (g.injuries[side].length ? g.injuries[side].map((i) => `<div class="row between"><span>${esc(i.name)}<span class="muted"> · ${esc(i.reason)}</span></span><span class="st ${esc(i.status)}">${esc(i.status)}</span></div>`).join("") : `<div class="muted">keine Meldungen</div>`);
   const rows = g.players.map((pl) => `<tr class="${pl.on ? "" : "dim"}"><td class="player"><button data-player="${pl.id}">${esc(pl.name)}</button><div class="muted">${pl.team} · ${dec(pl.min, 0)} Min${pl.flags.filter((f) => f !== "injury_report_stale").map((f) => " · " + (FLAGS[f] ?? f)).join("")}</div></td>${
-    M.PLAYER.map((k) => `<td class="num">${pl.d[k] ? dec(pl.d[k].mu, 1) : "–"}</td>`).join("")}</tr>`).join("");
+    ["points", "rebounds", "assists"].map((k) => `<td class="num">${pl.d[k] ? dec(pl.d[k].mu, 1) : "–"}</td>`).join("")}<td class="num">${pct(pl.dd, 0)}</td><td class="num">${pct(pl.td, 0)}</td></tr>`).join("");
   $("#view").innerHTML = `
     <div style="display:grid;gap:12px">
       <a class="back" href="#spiele">← Alle Spiele</a>
@@ -292,7 +297,7 @@ function renderGame(g) {
       <section class="card" aria-labelledby="calcTitle">
         <h3 id="calcTitle">Quote prüfen</h3>
         <div class="form">
-          <label class="full">Markt<select id="cMarket">${Object.entries(MARKETS).map(([k, v]) => `<option value="${k}" ${k === calc.market ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+          <label class="full">Markt<select id="cMarket">${CALC_MARKETS.map((k) => `<option value="${k}" ${k === calc.market ? "selected" : ""}>${MARKETS[k]}</option>`).join("")}</select></label>
           <label class="full" id="cPlayerWrap">Spieler<select id="cPlayer">${g.players.map((pl) => `<option value="${pl.id}" ${pl.id === calc.player ? "selected" : ""}>${esc(pl.name)} (${pl.team})</option>`).join("")}</select></label>
           <div class="full seg" role="group" aria-label="Auswahl" id="cSel"></div>
           <label id="cLineWrap">Linie<input id="cLine" inputmode="decimal" autocomplete="off"></label>
@@ -304,17 +309,17 @@ function renderGame(g) {
       <section class="card"><h3>Verletzungen</h3><div class="inj"><strong>${esc(g.awayName)}</strong>${inj("away")}<strong>${esc(g.homeName)}</strong>${inj("home")}</div>
         <div class="muted">Offizieller NBA Injury Report, Stand ${D.data.injuryReport ? fmtWhen(D.data.injuryReport) : "–"}.</div></section>
       <section class="card"><h3>Spieler: erwartete Werte</h3>
-        <div class="tablewrap"><table><thead><tr><th>Spieler</th>${M.PLAYER.map((k) => `<th>${SHORT[k]}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
-        <div class="muted">Antippen übernimmt den Spieler in „Quote prüfen“.</div></section>
+        <div class="tablewrap"><table><thead><tr><th>Spieler</th><th>PTS</th><th>REB</th><th>AST</th><th>DD</th><th>TD</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <div class="muted">DD/TD: Wahrscheinlichkeit für Double-Double bzw. Triple-Double. Antippen übernimmt den Spieler in „Quote prüfen“.</div></section>
     </div>`;
   const bind = () => {
     calc.line = $("#cLine").value; calc.price = $("#cPrice").value; calc.opp = $("#cOpp").value; compute(g);
   };
-  $("#cMarket").addEventListener("change", (e) => { calc.market = e.target.value; calc.sel = ["moneyline", "spread"].includes(calc.market) ? "home" : "over"; calc.line = defaultLine(g); calc.price = ""; calc.opp = ""; syncForm(g); });
+  $("#cMarket").addEventListener("change", (e) => { calc.market = e.target.value; calc.sel = ["moneyline", "spread"].includes(calc.market) ? "home" : YESNO.includes(calc.market) ? "yes" : "over"; calc.line = defaultLine(g); calc.price = ""; calc.opp = ""; syncForm(g); });
   $("#cPlayer").addEventListener("change", (e) => { calc.player = e.target.value; calc.line = defaultLine(g); syncForm(g); });
   ["#cLine", "#cPrice", "#cOpp"].forEach((s) => $(s).addEventListener("input", bind));
   document.querySelectorAll("[data-player]").forEach((b) => b.addEventListener("click", () => {
-    calc.player = b.dataset.player; if (!M.PLAYER.includes(calc.market)) { calc.market = "points"; calc.sel = "over"; }
+    calc.player = b.dataset.player; if (!isPlayerMarket(calc.market)) { calc.market = "points"; calc.sel = "over"; }
     calc.line = defaultLine(g); calc.price = ""; calc.opp = ""; syncForm(g); $("#calcTitle").scrollIntoView({ behavior: "smooth", block: "start" });
   }));
   if (calc.line === "") calc.line = defaultLine(g);
@@ -322,12 +327,13 @@ function renderGame(g) {
 }
 
 function syncForm(g) {
-  const isP = M.PLAYER.includes(calc.market);
+  const isP = isPlayerMarket(calc.market);
   $("#cMarket").value = calc.market;
   $("#cPlayerWrap").hidden = !isP;
-  $("#cLineWrap").hidden = calc.market === "moneyline";
+  $("#cLineWrap").hidden = noLine(calc.market);
   if (calc.player) $("#cPlayer").value = calc.player;
-  const sels = ["moneyline", "spread"].includes(calc.market) ? [["home", g.home], ["away", g.away]] : [["over", "Over"], ["under", "Under"]];
+  const sels = ["moneyline", "spread"].includes(calc.market) ? [["home", g.home], ["away", g.away]]
+    : YESNO.includes(calc.market) ? [["yes", "Ja"], ["no", "Nein"]] : [["over", "Over"], ["under", "Under"]];
   $("#cSel").innerHTML = sels.map(([k, v]) => `<button type="button" data-sel="${k}" aria-pressed="${calc.sel === k}">${v}</button>`).join("");
   $("#cSel").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     if (calc.market === "spread" && b.dataset.sel !== calc.sel) { const l = parse(calc.line); if (l != null) calc.line = String(-l).replace(".", ","); }
@@ -342,6 +348,7 @@ function distFor(g, c) {
   if (c.market === "moneyline" || c.market === "spread") return { d: g.model.margin, on: g.model.on, q: g.model.q, flags: g.model.flags };
   if (c.market === "total") return { d: g.model.total, on: g.model.on, q: g.model.q, flags: g.model.flags };
   const p = g.players.find((x) => x.id === c.player);
+  if (p && YESNO.includes(c.market)) return p[c.market] == null ? null : { d: { p: p[c.market] }, on: p.on, q: p.q, flags: p.flags, name: p.name };
   return p && p.d[c.market] ? { d: p.d[c.market], on: p.on, q: p.q, flags: p.flags, name: p.name } : null;
 }
 
@@ -349,8 +356,8 @@ function distFor(g, c) {
 function assess(g, c) {
   const src = distFor(g, c);
   if (!src) return null;
-  const line = c.market === "moneyline" ? null : c.line;
-  if (c.market !== "moneyline" && line == null) return { src, needLine: true };
+  const line = noLine(c.market) ? null : c.line;
+  if (!noLine(c.market) && line == null) return { src, needLine: true };
   const S = D.settings, pr = M.marketProbability(src.d, c.market, c.sel, line);
   const out = { src, pr, line, fair: 1 / pr.p, minPrice: pr.p - S.minEdge > 0.02 ? 1 / (pr.p - S.minEdge) / (1 - tax()) : null };
   if (c.price == null || c.price <= 1) return out;
@@ -376,9 +383,9 @@ function assess(g, c) {
 }
 
 function selLabel(g, c) {
-  const who = M.PLAYER.includes(c.market) ? (g.players.find((x) => x.id === c.player)?.name ?? "") + " · " : "";
-  const side = c.sel === "home" ? g.home : c.sel === "away" ? g.away : c.sel === "over" ? "Over" : "Under";
-  const ln = c.market === "moneyline" ? "" : c.market === "spread" ? ` ${c.line > 0 ? "+" : ""}${dec(c.line, 1)}` : ` ${dec(c.line, 1)}`;
+  const who = isPlayerMarket(c.market) ? (g.players.find((x) => x.id === c.player)?.name ?? "") + " · " : "";
+  const side = selName(g, c.sel);
+  const ln = noLine(c.market) ? "" : c.market === "spread" ? ` ${c.line > 0 ? "+" : ""}${dec(c.line, 1)}` : ` ${dec(c.line, 1)}`;
   return `${who}${MARKETS[c.market]} ${side}${ln}`;
 }
 
@@ -430,28 +437,27 @@ function candidates(dayIso) {
     out.push({ g, pl, market: c.market, sel: c.sel, line: c.line, p: c.p, raw: c.raw, avg: c.l10, mu: c.mu,
       minPrice: 1 / (c.p - S.minEdge) / (1 - tax()) });
   }
-  return out.sort((a, b) => b.p - a.p).slice(0, 20);
+  return out.sort((a, b) => b.p - a.p);
 }
 
 function trackCard() {
   const T = D.suggestions?.track;
   if (!T) return "";
-  const live = T.props, bt = T.backtest?.markets ?? {};
-  const btN = Object.values(bt).reduce((a, m) => a + m.n, 0), btH = Object.values(bt).reduce((a, m) => a + m.hits, 0);
-  const btE = btN ? Object.values(bt).reduce((a, m) => a + m.expected * m.n, 0) / btN : null;
-  const rows = M.PLAYER.map((m) => { const l = T.by_market[m], b = bt[m], k = T.learning[m];
-    return `<tr><td>${MARKETS[m]}</td><td class="num">${l.n ? `${l.hits}/${l.n}` : "–"}</td><td class="num">${pct(l.hit_rate, 0)}</td><td class="num">${b ? pct(b.hit_rate, 1) : "–"}</td><td class="num">${k ? dec(k.k, 2) : "–"}</td></tr>`; }).join("");
-  const recent = T.recent.slice(0, 12).map((r) => `<div class="row between"><span>${r.status === "won" ? "✓" : "✗"} ${esc(r.name)} · ${MARKETS[r.market]} ${r.sel === "over" ? "Over" : "Under"} ${dec(r.line, 1)}</span><span class="num muted">${dec(r.actual, 0)}</span></div>`).join("");
-  return `<section class="card"><h3>Trefferquote der Vorschläge</h3>
+  const live = T.by_market.points, bt = T.backtest?.markets ?? {}, bp = bt.points;
+  const btN = bp?.n ?? 0, btH = bp?.hits ?? 0, btE = bp?.expected ?? null;
+  const rows = (T.markets ?? Object.keys(T.by_market)).map((m) => { const l = T.by_market[m], b = bt[m];
+    return `<tr><td>${MARKETS[m]}</td><td class="num">${l.n ? `${l.hits}/${l.n}` : "–"}</td><td class="num">${pct(l.hit_rate, 0)}</td><td class="num">${pct(l.expected, 0)}</td><td class="num">${b ? `${pct(b.hit_rate, 0)} / ${pct(b.expected, 0)}` : "–"}</td></tr>`; }).join("");
+  const recent = T.recent.slice(0, 12).map((r) => `<div class="row between"><span>${r.status === "won" ? "✓" : "✗"} ${esc(r.name)} · ${MARKETS[r.market]} ${({ over: "Over", under: "Under", yes: "Ja", no: "Nein" })[r.sel]}${r.line == null ? "" : " " + dec(r.line, 1)}</span><span class="num muted">${YESNO.includes(r.market) ? "" : dec(r.actual, 0)}</span></div>`).join("");
+  return `<section class="card"><h3>Trefferquote der Punkte-Tipps</h3>
     <div class="kpis">
       <div class="kpi"><div class="k">Seit Start</div><div class="v num">${live.n ? pct(live.hit_rate, 0) : "–"}</div><div class="s num">${live.n ? `${live.hits} von ${live.n}` : "noch keine Ergebnisse"}</div></div>
       <div class="kpi"><div class="k">Erwartet</div><div class="v num">${live.n ? pct(live.expected, 0) : "–"}</div><div class="s">laut Modell</div></div>
       <div class="kpi"><div class="k">Rückrechnung</div><div class="v num">${btN ? pct(btH / btN, 1) : "–"}</div><div class="s num">${btN ? `erwartet ${pct(btE, 1)}` : ""}</div></div>
     </div>
-    <p class="muted" style="margin:0">Gezählt wird, ob die Wette an der genannten Linie eingetreten wäre. Das ist die Treffsicherheit des Modells, nicht dein Gewinn: Der hängt von Linie und Quote deines Buchmachers ab. Spieler ohne Einsatz zählen nicht.${btN ? ` Rückrechnung: dieselbe Regel auf ${btN.toLocaleString("de-DE")} Fälle aus ${T.backtest.period?.start?.slice(0, 7) ?? ""} bis ${T.backtest.period?.end?.slice(0, 7) ?? ""}, die das Modell beim Training nicht kannte.` : ""}</p>
-    <details><summary>Details je Markt und letzte Ergebnisse</summary>
-      <div class="tablewrap" style="margin-top:8px"><table><thead><tr><th>Markt</th><th>Treffer</th><th>Quote</th><th>Rückr.</th><th>Korr.</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="muted">Korrektur: Aus Rückrechnung und laufenden Ergebnissen gelernter Faktor. Unter 1,00 heißt, das Modell war in diesem Markt zu optimistisch; die angezeigten Wahrscheinlichkeiten und „lohnt ab“-Quoten sind bereits entsprechend angepasst. Sieger-Wetten: ${T.moneyline.n ? `${T.moneyline.hits} von ${T.moneyline.n} Favoriten haben gewonnen (erwartet ${pct(T.moneyline.expected, 0)}).` : "noch keine Ergebnisse."}</p>
+    <p class="muted" style="margin:0">Gezählt wird, ob die Wette wie angezeigt eingetreten wäre (bei Punkten an der genannten Linie). Das ist die Treffsicherheit des Modells, nicht dein Gewinn: Der hängt von Linie und Quote deines Buchmachers ab. Spieler ohne Einsatz zählen nicht.${btN ? ` Rückrechnung: dieselbe Regel auf ${btN.toLocaleString("de-DE")} Fälle aus ${T.backtest.period?.start?.slice(0, 7) ?? ""} bis ${T.backtest.period?.end?.slice(0, 7) ?? ""}, die das Modell beim Training nicht kannte.` : ""}</p>
+    <details><summary>Alle Märkte und letzte Ergebnisse</summary>
+      <div class="tablewrap" style="margin-top:8px"><table><thead><tr><th>Markt</th><th>Treffer</th><th>Quote</th><th>Erwartet</th><th>Rückrechnung</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="muted">Rückrechnung: Trefferquote / erwartete Quote derselben Regel in den Testsaisons. Double-Double und Triple-Double sind „Ja“-Tipps mit niedriger Wahrscheinlichkeit; entscheidend ist dort, ob Trefferquote und Erwartung zusammenpassen. Aus Rückrechnung und laufenden Ergebnissen lernt die App je Markt eine Korrektur; die angezeigten Wahrscheinlichkeiten und „lohnt ab“-Quoten sind bereits angepasst. Sieger-Wetten: ${T.moneyline.n ? `${T.moneyline.hits} von ${T.moneyline.n} Favoriten haben gewonnen (erwartet ${pct(T.moneyline.expected, 0)}).` : "noch keine Ergebnisse."}</p>
       <div class="inj">${recent || `<div class="muted">Die ersten Ergebnisse erscheinen nach dem nächsten Update, sobald Spiele beendet sind.</div>`}</div>
     </details></section>`;
 }
@@ -474,12 +480,14 @@ function renderTips() {
       </button><button type="button" class="tipdel" data-del="${i}" aria-label="Entfernen">✕</button></div>`).join("")
     : `<div class="muted">Noch keine Quoten gemerkt. Tippe unten einen Kandidaten an, trage die Quote deines Buchmachers ein und wähle „Quote merken“.</div>`;
   const cand = candidates(day);
-  const candHtml = cand.length ? cand.map((c, i) => `<button type="button" class="tip tipmain" data-cand="${i}">
+  const candRow = (c) => `<button type="button" class="tip tipmain" data-cand="${cand.indexOf(c)}">
       <div><div class="tipname">${esc(c.pl.name)} <span class="muted">${c.pl.team}</span></div>
-        <div class="num">${MARKETS[c.market]} <b>${c.sel === "over" ? "Over" : "Under"} ${dec(c.line, 1)}</b></div>
-        <div class="muted num">Modell ${dec(c.mu, 1)} · Schnitt letzte 10: ${dec(c.avg, 1)} · ${c.g.away} @ ${c.g.home} ${fmtTime(c.g.tip)}</div></div>
+        <div class="num">${MARKETS[c.market]} <b>${selName(c.g, c.sel)}${c.line == null ? "" : " " + dec(c.line, 1)}</b></div>
+        <div class="muted num">${c.market === "points" ? `Modell ${dec(c.mu, 1)} · Schnitt letzte 10: ${dec(c.avg, 1)} · ` : `Modell: ${dec(c.pl.d.points?.mu, 0)} Pkt, ${dec(c.pl.d.rebounds?.mu, 0)} Reb, ${dec(c.pl.d.assists?.mu, 0)} Ast · `}${c.g.away} @ ${c.g.home} ${fmtTime(c.g.tip)}</div></div>
       <div class="tipright"><div class="num"><b>${pct(c.p, 0)}</b></div><div class="muted">lohnt ab</div><div class="num"><b>${dec(c.minPrice)}</b></div></div>
-    </button>`).join("") : `<div class="muted">Für diesen Tag gibt es keine klaren Kandidaten (oder die Spiele haben begonnen).</div>`;
+    </button>`;
+  const none = `<div class="muted">Für diesen Tag gibt es keine klaren Kandidaten (oder die Spiele haben begonnen).</div>`;
+  const section = (m) => cand.filter((c) => c.market === m).map(candRow).join("") || none;
   const ml = D.games.filter((g) => gameDay(g) === day && !started(g) && g.model && g.model.on).map((g) => {
     const p = homeProb(g), fav = p >= 0.5, pf = fav ? p : 1 - p;
     return `<button type="button" class="tip tipmain" data-ml="${g.id}" data-sel="${fav ? "home" : "away"}">
@@ -489,9 +497,16 @@ function renderTips() {
   $("#view").innerHTML = `<div style="display:grid;gap:12px">
     <div class="tabs" role="group" aria-label="Spieltag">${dayTabs}</div>
     <section class="card"><h3>Deine gemerkten Quoten</h3><div class="tips">${savedHtml}</div></section>
-    <section class="card"><h3>Kandidaten: Spieler-Wetten</h3>
-      <p class="muted" style="margin:0">Hier weicht das Modell am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Jeder Vorschlag wird gespeichert und nach dem Spiel ausgewertet (siehe Trefferquote unten). Das ist noch keine Empfehlung: Eine Wette lohnt nur, wenn dein Buchmacher <b>diese Linie</b> mindestens zur Quote „lohnt ab“ anbietet. Bei anderer Linie antippen und im Rechner prüfen.</p>
-      <div class="tips">${candHtml}</div></section>
+    <section class="card"><h3>Kandidaten: Punkte</h3>
+      <p class="muted" style="margin:0">Hier weicht das Modell am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Eine Wette lohnt nur, wenn dein Buchmacher <b>diese Linie</b> mindestens zur Quote „lohnt ab“ anbietet. Bei anderer Linie antippen und im Rechner prüfen.</p>
+      <div class="tips">${section("points")}</div></section>
+    <section class="card"><h3>Kandidaten: Double-Double</h3>
+      <p class="muted" style="margin:0">Wahrscheinlichkeit, dass der Spieler in mindestens zwei von Punkten, Rebounds und Assists zweistellig wird. Lohnt, wenn die Quote für „Ja“ mindestens „lohnt ab“ beträgt.</p>
+      <div class="tips">${section("dd")}</div></section>
+    <section class="card"><h3>Kandidaten: Triple-Double</h3>
+      <p class="muted" style="margin:0">Selten und entsprechend hoch quotiert. Gelistet ab ${pct(0.08, 0)} Wahrscheinlichkeit für „Ja“.</p>
+      <div class="tips">${section("td")}</div></section>
+    <p class="muted" style="margin:0">Alle Kandidaten werden gespeichert und nach dem Spiel ausgewertet (Trefferquote unten).</p>
     <section class="card"><h3>Sieger-Wetten</h3>
       <p class="muted" style="margin:0">Bei Sieger-Wetten ist das Modell im Test nicht besser als eine einfache Stärke-Rangliste. Mit Vorsicht nutzen.</p>
       <div class="tips">${ml || `<div class="muted">Keine offenen Spiele.</div>`}</div></section>

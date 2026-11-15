@@ -35,9 +35,10 @@ def test_record_settle_and_learning(db, monkeypatch):
     assert r["recorded"] > 4 and r["props"] >= 1
     first = db.query(Suggestion).count()
     assert sg.record(db)["recorded"] == r["recorded"] and db.query(Suggestion).count() == first  # replaced, not duplicated
-    s = db.query(Suggestion).filter_by(kind="prop").first()
+    assert {x.market for x in db.query(Suggestion).filter_by(kind="prop")} <= {"points", "dd", "td"}  # only offered markets
+    s = db.query(Suggestion).filter_by(kind="prop", market="points").first()
     assert s.line % 1 == 0.5 and 0.5 < s.prob <= 0.70 and s.status == "open"
-    assert db.query(Suggestion).filter_by(kind="prop", player_id=s.player_id, game_id=s.game_id).count() == 1  # one per player
+    assert db.query(Suggestion).filter_by(market="points", player_id=s.player_id, game_id=s.game_id).count() == 1
     # play the games: the suggested player lands on the winning side, another prop's player does not play
     g = db.get(Game, s.game_id)
     for gg in db.query(Game).filter(Game.status != "final"):
@@ -49,20 +50,20 @@ def test_record_settle_and_learning(db, monkeypatch):
     db.flush()
     assert sg.settle(db)["settled"] == first
     assert s.status == "won" and s.actual == val
-    others = db.query(Suggestion).filter(Suggestion.kind == "prop", Suggestion.id != s.id).all()
+    others = db.query(Suggestion).filter(Suggestion.kind == "prop", Suggestion.player_id != s.player_id).all()
     assert all(o.status == "void" for o in others)  # no box score row -> did not play -> void
     ml = db.query(Suggestion).filter_by(kind="moneyline").all()
     assert {m.status for m in ml} <= {"won", "lost"} and all((m.status == "won") == (m.selection == "home") for m in ml)
     st = sg.stats(db)
-    assert st["props"] == {"n": 1, "hits": 1, "hit_rate": 1.0, "expected": pytest.approx(s.prob, abs=1e-4)}
-    assert st["learning"][s.market]["n_live"] == 1 and st["recent"][0]["status"] == "won"
+    assert st["by_market"]["points"] == {"n": 1, "hits": 1, "hit_rate": 1.0, "expected": pytest.approx(s.prob, abs=1e-4)}
+    assert st["learning"]["points"]["n_live"] == 1 and any(r["status"] == "won" and r["market"] == "points" for r in st["recent"])
     assert sg.record(db)["recorded"] == 0  # nothing upcoming; settled suggestions stay untouched
     assert db.query(Suggestion).count() == first
 
 
 def test_prior_caps_backtest_weight_and_live_results_move_k(db):
     # backtest says: claimed 60-61 %, real 55 % -> k < 1
-    hist = {"10": [4000, 2200]}
+    hist = {"60": [4000, 2200]}
     sg.store_prior(db, {"points": {"n": 4000, "hits": 2200, "expected": 0.605, "hit_rate": 0.55, "k": 0.47, "hist": hist}}, {"start": "a", "end": "b"})
     k0 = sg.learned_k(db)["points"]
     assert k0["k"] == pytest.approx(0.47, abs=0.06) and k0["n_backtest"] == 4000 and k0["n_live"] == 0
@@ -72,3 +73,24 @@ def test_prior_caps_backtest_weight_and_live_results_move_k(db):
     db.flush()
     k1 = sg.learned_k(db)["points"]
     assert k1["n_live"] == 600 and k0["k"] < k1["k"] < 1.05
+
+
+def test_double_double_probabilities():
+    from app.betting import doubles
+    R = np.eye(3)
+    mu = np.array([[28.0, 12.0, 9.0], [8.0, 3.0, 2.0], [25.0, 4.0, 4.0]])
+    al = np.full((3, 3), 0.08)
+    dd, td = doubles.double_probs(mu, al, R)
+    assert dd[0] > 0.6 and dd[1] < 0.02 and 0 < td[0] < dd[0] and td[2] < 0.01
+    # independent case equals the closed form P(at least two of three)
+    from scipy import stats
+    n = 1 / 0.08
+    a, b, c = (stats.nbinom.sf(9, n, n / (n + m)) for m in mu[0])
+    exact = a * b + a * c + b * c - 2 * a * b * c
+    assert dd[0] == pytest.approx(exact, abs=0.02) and td[0] == pytest.approx(a * b * c, abs=0.02)
+    # positive correlation between the stats makes doubles more likely for a player near the thresholds
+    Rp = np.array([[1, .4, .4], [.4, 1, .4], [.4, .4, 1.0]])
+    mid = np.array([[11.0, 9.0, 9.0]])
+    assert doubles.double_probs(mid, al[:1], Rp)[1][0] > doubles.double_probs(mid, al[:1], R)[1][0]
+    assert doubles.actual_double(12, 10, 3) == 2 and doubles.actual_double(12, 10, 11) == 3 and doubles.actual_double(30, 9, 9) == 1
+    assert doubles.actual_double(8, 12, 4, blk=10) == 2  # blocks count when settling

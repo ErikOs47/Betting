@@ -18,6 +18,7 @@ from scipy import optimize
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.betting import doubles
 from app.betting.probability import PLAYER_MARKETS, market_probability
 from app.db import Game, Player, PlayerGameStat, Prediction, Setting, Suggestion, utcnow
 
@@ -27,7 +28,11 @@ BLOCKING_FLAGS = {"returning_from_absence", "new_team", "questionable", "few_gam
 L10_KEY = {"points": "p_pts_l10", "rebounds": "p_trb_l10", "assists": "p_ast_l10", "threes": "p_fg3_l10", "pra": "p_pra_l10"}
 STAT = {"points": "pts", "rebounds": "trb", "assists": "ast", "threes": "fg3"}
 PRIOR_WEIGHT = 300.0
-MAX_PER_DAY = 20
+# what is suggested and tracked: markets the user's bookmaker actually offers for players
+SUGGEST_MARKETS = ("points", "dd", "td")
+MAX_PER_DAY = {"points": 12, "dd": 8, "td": 5}
+DD_MIN = 0.25  # double-double "yes" is listed from this probability (bookmakers usually offer only "yes")
+TD_MIN = 0.08  # triple-double "yes" is listed from this probability
 PRIOR_KEY = "suggestion_prior"
 
 
@@ -68,11 +73,32 @@ def backtest_prior(op, algos: list[str]) -> dict:
         y = np.where(over >= 0.5, y_over, ~y_over).astype(float)
         m = keep & (p >= MIN_P) & (p <= MAX_RAW_P)
         p, y = p[m], y[m]
-        bins = np.clip(((p - 0.5) * 100).astype(int), 0, 49)
-        hist = {int(b): [int((bins == b).sum()), int(y[bins == b].sum())] for b in np.unique(bins)}
-        out[market] = {"n": int(len(p)), "hits": int(y.sum()), "expected": round(float(p.mean()), 4) if len(p) else None,
-                       "hit_rate": round(float(y.mean()), 4) if len(p) else None, "k": round(fit_k(p, y), 3), "hist": hist}
+        out[market] = _prior_entry(p, y)
+    # double-double / triple-double: joint probability of points, rebounds, assists
+    from app.betting import doubles
+    d = op[rot]
+    R = doubles.corr_matrix()
+    pd_, pt_ = [], []
+    for a in algos:
+        mu = np.column_stack([d[f"{a}_mu_{m}"].to_numpy() for m in doubles.ORDER])
+        al = np.column_stack([d[f"{a}_alpha_{m}"].to_numpy() for m in doubles.ORDER])
+        x, t = doubles.double_probs(mu, al, R)
+        pd_.append(x), pt_.append(t)
+    p_dd, p_td = np.mean(pd_, axis=0), np.mean(pt_, axis=0)
+    cnt = (d["pts"].to_numpy() >= 10).astype(int) + (d["trb"].to_numpy() >= 10) + (d["ast"].to_numpy() >= 10)
+    m = p_dd >= DD_MIN
+    out["dd"] = _prior_entry(p_dd[m], (cnt >= 2).astype(float)[m])
+    m = p_td >= TD_MIN
+    out["td"] = _prior_entry(p_td[m], (cnt == 3).astype(float)[m])
+    out["dd_all"] = {"n": int(len(d)), "expected": round(float(p_dd.mean()), 4), "hit_rate": round(float((cnt >= 2).mean()), 4)}
     return out
+
+
+def _prior_entry(p: np.ndarray, y: np.ndarray) -> dict:
+    bins = np.clip((p * 100).astype(int), 0, 99)
+    hist = {int(b): [int((bins == b).sum()), int(y[bins == b].sum())] for b in np.unique(bins)}
+    return {"n": int(len(p)), "hits": int(y.sum()), "expected": round(float(p.mean()), 4) if len(p) else None,
+            "hit_rate": round(float(y.mean()), 4) if len(p) else None, "k": round(fit_k(p, y), 3), "hist": hist}
 
 
 def store_prior(db: Session, prior: dict, period: dict | None = None) -> None:
@@ -93,17 +119,18 @@ def _prior(db: Session) -> dict:
 def learned_k(db: Session) -> dict[str, dict]:
     """Per market: k fitted on the capped backtest prior plus all settled live suggestions."""
     prior = _prior(db)["markets"]
-    live: dict[str, list] = {m: [] for m in PLAYER_MARKETS}
+    live: dict[str, list] = {m: [] for m in SUGGEST_MARKETS}
     for s in db.scalars(select(Suggestion).where(Suggestion.kind == "prop", Suggestion.status.in_(("won", "lost")))):
-        live[s.market].append((s.raw_prob, 1.0 if s.status == "won" else 0.0))
+        if s.market in live:
+            live[s.market].append((s.raw_prob, 1.0 if s.status == "won" else 0.0))
     out = {}
-    for m in PLAYER_MARKETS:
+    for m in SUGGEST_MARKETS:
         ps, ys, ws = [], [], []
         pm = prior.get(m)
-        if pm and pm["n"]:
+        if pm and pm.get("n"):
             scale = min(1.0, PRIOR_WEIGHT / pm["n"])
             for b, (n, hits) in pm["hist"].items():
-                pc = 0.5 + (int(b) + 0.5) / 100
+                pc = (int(b) + 0.5) / 100
                 ps += [pc, pc]; ys += [1.0, 0.0]; ws += [hits * scale, (n - hits) * scale]
         for p, y in live[m]:
             ps.append(p); ys.append(y); ws.append(1.0)
@@ -131,32 +158,33 @@ def generate(db: Session) -> list[dict]:
         f = pts.features or {}
         if (f.get("p_min_l10") or 0) < MIN_MINUTES or BLOCKING_FLAGS & set(pts.quality_flags or []):
             continue
-        best = None
-        for m in PLAYER_MARKETS:
-            pr, avg = item["preds"].get(m), f.get(L10_KEY[m])
-            if pr is None or avg is None:
-                continue
+        base = {"game_id": gid, "player_id": pid, "team_id": pts.team_id, "line": None, "l10": None, "mu": None}
+        avg = f.get(L10_KEY["points"])
+        if avg is not None:
             line = math.floor(avg) + 0.5
-            if m == "threes" and line < 1.5:
-                continue
-            over = market_probability(pr.dist, m, "over", line)["p"]
+            over = market_probability(pts.dist, "points", "over", line)["p"]
             sel, raw = ("over", over) if over >= 0.5 else ("under", 1 - over)
-            p = adjust(raw, ks.get(m, 1.0))
-            if raw > MAX_RAW_P or p < MIN_P:
-                continue
-            c = {"game_id": gid, "player_id": pid, "team_id": pts.team_id, "market": m, "selection": sel, "line": line,
-                 "raw_prob": round(raw, 4), "prob": round(p, 4), "mu": round(pr.dist["mu"], 2), "l10": round(avg, 1)}
-            if best is None or c["prob"] > best["prob"]:
-                best = c
-        if best:
-            out.append(best)
+            p = adjust(raw, ks.get("points", 1.0))
+            if raw <= MAX_RAW_P and p >= MIN_P:
+                out.append({**base, "market": "points", "selection": sel, "line": line, "raw_prob": round(raw, 4), "prob": round(p, 4),
+                            "mu": round(pts.dist["mu"], 2), "l10": round(avg, 1)})
+        dbl = doubles.ensemble_from_dists({m: pr.dist for m, pr in item["preds"].items()})
+        if dbl:
+            p_dd, p_td = dbl
+            p = adjust(p_dd, ks.get("dd", 1.0))
+            if p >= DD_MIN:
+                out.append({**base, "market": "dd", "selection": "yes", "raw_prob": round(p_dd, 4), "prob": round(p, 4)})
+            p = adjust(p_td, ks.get("td", 1.0))
+            if p >= TD_MIN:
+                out.append({**base, "market": "td", "selection": "yes", "raw_prob": round(p_td, 4), "prob": round(p, 4)})
     # only the strongest per game day are shown to the user - and exactly those are tracked
     dates = {g.id: g.date for _, g in rows}
     kept, per_day = [], {}
     for c in sorted(out, key=lambda c: -c["prob"]):
         d = dates[c["game_id"]]
-        if per_day.get(d, 0) < MAX_PER_DAY:
-            per_day[d] = per_day.get(d, 0) + 1
+        key = (d, c["market"])
+        if per_day.get(key, 0) < MAX_PER_DAY[c["market"]]:
+            per_day[key] = per_day.get(key, 0) + 1
             kept.append(c)
     out = kept
     # game winners: the model's favourite of every open game (tracked for information, no learning)
@@ -203,6 +231,10 @@ def settle(db: Session) -> dict:
             st = db.get(PlayerGameStat, (s.game_id, s.player_id))
             if st is None or not st.played or st.seconds <= 0:
                 s.status = "void"  # did not play: bookmakers void the bet
+            elif s.market in ("dd", "td"):
+                s.actual = float(doubles.actual_double(st.pts, st.trb, st.ast, st.stl, st.blk))
+                hit = s.actual >= (2 if s.market == "dd" else 3)
+                s.status = "won" if hit == (s.selection == "yes") else "lost"
             else:
                 s.actual = float(st.pts + st.trb + st.ast if s.market == "pra" else getattr(st, STAT[s.market]))
                 s.status = "won" if (s.actual > s.line) == (s.selection == "over") else "lost"
@@ -221,14 +253,15 @@ def _summary(rows: list[Suggestion]) -> dict:
 
 def stats(db: Session) -> dict:
     rows = list(db.scalars(select(Suggestion).where(Suggestion.status != "open").order_by(Suggestion.settled_at.desc())))
-    props = [s for s in rows if s.kind == "prop"]
+    props = [s for s in rows if s.kind == "prop" and s.market in SUGGEST_MARKETS]
     decided = [s for s in props if s.status in ("won", "lost")][:40]
     names = {p.id: p.name for p in db.scalars(select(Player).where(Player.id.in_({s.player_id for s in decided if s.player_id})))}
     games = {g.id: g for g in db.scalars(select(Game).where(Game.id.in_({s.game_id for s in decided})))}
     prior = _prior(db)
     return {
         "props": _summary(props),
-        "by_market": {m: _summary([s for s in props if s.market == m]) for m in PLAYER_MARKETS},
+        "by_market": {m: _summary([s for s in props if s.market == m]) for m in SUGGEST_MARKETS},
+        "markets": list(SUGGEST_MARKETS),
         "moneyline": _summary([s for s in rows if s.kind == "moneyline"]),
         "void": sum(s.status == "void" for s in rows),
         "recent": [{"name": names.get(s.player_id, s.player_id), "market": s.market, "sel": s.selection, "line": s.line, "actual": s.actual,
@@ -236,5 +269,7 @@ def stats(db: Session) -> dict:
                    for s in decided],
         "learning": learned_k(db),
         "backtest": {"period": prior.get("period"),
-                     "markets": {m: {k: v[k] for k in ("n", "hits", "hit_rate", "expected", "k")} for m, v in prior.get("markets", {}).items()}},
+                     "markets": {m: {k: v.get(k) for k in ("n", "hits", "hit_rate", "expected", "k")} for m, v in prior.get("markets", {}).items()
+                                 if m in SUGGEST_MARKETS},
+                     "dd_all": prior.get("markets", {}).get("dd_all")},
     }

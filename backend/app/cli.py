@@ -118,7 +118,7 @@ def suggestion_prior(parquet: str, algos: str = "lightgbm,xgboost") -> None:
     with session_scope() as db:
         prior = suggestions.backtest_prior(op, algos.split(","))
         suggestions.store_prior(db, prior, {"start": str(op["date"].min().date()), "end": str(op["date"].max().date()), "n_player_rows": int(len(op))})
-        _p({m: {k: v[k] for k in ("n", "hits", "hit_rate", "expected", "k")} for m, v in prior.items()})
+        _p({m: {k: v.get(k) for k in ("n", "hits", "hit_rate", "expected", "k")} for m, v in prior.items()})
 
 
 @app.command("scheduled-update")
