@@ -17,6 +17,12 @@ export default function ValueFinder() {
   const [msg, setMsg] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const { data, error, loading, reload } = useApi<any>(`value-bets?all=${all}`, 60000);
+  const fair = useApi<any>("fair-lines", 120000);
+  const [fm, setFm] = useState("points");
+  const [fg, setFg] = useState("");
+  const fairGames: [string, string][] = Array.from(new Map<string, string>((fair.data?.lines ?? []).map((l: any) => [l.game_id, l.matchup])).entries());
+  const fairGame = fg || fairGames[0]?.[0] || "";
+  const fairRows = (fair.data?.lines ?? []).filter((l: any) => l.market === fm && l.game_id === fairGame);
   const slip = useSlip();
   const rows = useMemo(() => (data?.candidates ?? []).filter((c: any) => !market || c.market === market)
     .sort((a: any, b: any) => Number(b.passes) - Number(a.passes) || b[sort] - a[sort]), [data, market, sort]);
@@ -46,7 +52,7 @@ export default function ValueFinder() {
         {f && <span className="text-xs text-ink-3">Filter: Edge ≥ {pct(f.min_edge, 0)} · Confidence ≥ {f.min_confidence} · EV &gt; {pct(f.min_ev, 0)} · Datenqualität ≥ {pct(f.min_data_quality, 0)}</span>}
       </div>
       <Card title={`${data?.count_passing ?? 0} Value Bets erfüllen alle Filter`}>
-        <State loading={loading} error={error} empty={rows.length === 0 && "Keine Kandidaten. Ohne aktuelle Quoten (Odds-API-Schlüssel) kann der Value Finder nichts vergleichen – nutze dann die manuelle Quoteneingabe in der Spielanalyse."}>
+        <State loading={loading} error={error} empty={rows.length === 0 && "Keine Kandidaten. Erfasse Buchmacherquoten (z. B. Tipico) in der Spielanalyse eines Spiels – sie erscheinen dann hier. Unten stehen die fairen Linien des Modells mit Mindestquoten."}>
           <Scroll>
             <table>
               <thead><tr><th>Partie</th><th>Wette</th><th>Beste Quote</th><th>Faire Quote</th><th>Modell</th><th>Markt (fair)</th><th>Edge</th><th>EV</th><th>Confidence</th><th>Einsatz (¼ Kelly)</th><th></th></tr></thead>
@@ -56,7 +62,7 @@ export default function ValueFinder() {
                     <tr key={i} className={c.passes ? "" : "opacity-60"}>
                       <td><div>{c.matchup}</div><div className="text-xs text-ink-3">{time(c.tip_utc)}</div></td>
                       <td><div className="font-medium">{c.player_name ?? MARKET[c.market]}</div><div className="text-xs text-ink-2">{c.player_name ? `${MARKET[c.market]} ` : ""}{SEL[c.selection]} {c.line ?? ""}</div></td>
-                      <td className="num"><b>{c.price.toFixed(2)}</b><div className="text-xs text-ink-3">{c.bookmaker} · {c.n_books} Bücher</div></td>
+                      <td className="num"><b>{c.price.toFixed(2)}</b><div className="text-xs text-ink-3">{c.bookmaker} · {c.n_books} {c.n_books === 1 ? "Buch" : "Bücher"}{c.price_net < c.price - 1e-9 ? ` · netto ${c.price_net.toFixed(2)}` : ""}</div></td>
                       <td className="num">{c.fair_odds.toFixed(2)}</td>
                       <td className="num">{pct(c.model_prob)}</td>
                       <td className="num">{pct(c.consensus_prob)}<div className="text-xs text-ink-3">Marge {pct(c.overround)}</div></td>
@@ -97,6 +103,36 @@ export default function ValueFinder() {
           </Scroll>
         </State>
       </Card>
+      <div className="mt-5">
+        <Card title="Faire Linien des Modells (ohne Quoten nutzbar)" right={<div className="flex gap-2">
+          <select value={fairGame} onChange={(e) => setFg(e.target.value)} aria-label="Partie faire Linien">{fairGames.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select>
+          <select value={fm} onChange={(e) => setFm(e.target.value)} aria-label="Markt faire Linien">
+            {Object.keys(MARKET).filter((m) => m !== "parlay").map((m) => <option key={m} value={m}>{MARKET[m]}</option>)}
+          </select></div>}>
+          <p className="mb-3 text-xs text-ink-3">Vergleiche diese Werte mit der Quote deines Buchmachers. „Mindestquote“ ist die Quote, ab der der Edge-Filter ({pct(fair.data?.min_edge, 0)}) sicher erfüllt ist{fair.data?.payout_tax > 0 ? `, inklusive ${pct(fair.data.payout_tax, 1)} Wettsteuer` : ""} – gültig nur für genau die angegebene Linie. Bietet der Buchmacher eine andere Linie, nutze „Quote prüfen“ in der Spielanalyse.</p>
+          <State loading={fair.loading} error={fair.error} empty={fairRows.length === 0 && "Keine aktiven Prognosen für anstehende Spiele in diesem Markt."}>
+            <Scroll>
+              <table>
+                <thead><tr><th>Partie</th><th>{fm === "moneyline" || fm === "spread" || fm === "total" ? "Markt" : "Spieler"}</th><th>Erwartung</th><th>Linie</th><th>Wahrsch. {fm === "moneyline" || fm === "spread" ? "Heim" : "Over"}</th><th>Faire Quote {fm === "moneyline" || fm === "spread" ? "Heim / Auswärts" : "Over / Under"}</th><th>Mindestquote {fm === "moneyline" || fm === "spread" ? "Heim / Auswärts" : "Over / Under"}</th><th>Datenqualität</th></tr></thead>
+                <tbody>
+                  {fairRows.map((l: any, i: number) => (
+                    <tr key={i}>
+                      <td><div>{l.matchup}</div><div className="text-xs text-ink-3">{time(l.tip_utc)}</div></td>
+                      <td className="font-medium">{l.player_name ? <>{l.player_name} <span className="font-normal text-ink-3">{l.team}</span></> : MARKET[l.market]}</td>
+                      <td className="num">{l.mean > 0 && (fm === "moneyline" || fm === "spread") ? "+" : ""}{l.mean}</td>
+                      <td className="num">{l.line == null ? "–" : fm === "spread" ? `Heim ${l.line > 0 ? "+" : ""}${l.line}` : l.line}</td>
+                      <td className="num">{pct(l.p_a)}</td>
+                      <td className="num">{l.fair_a.toFixed(2)} / {l.fair_b.toFixed(2)}</td>
+                      <td className="num font-medium">{l.min_a?.toFixed(2) ?? "–"} / {l.min_b?.toFixed(2) ?? "–"}</td>
+                      <td className="num">{pct(l.data_quality, 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Scroll>
+          </State>
+        </Card>
+      </div>
     </>
   );
 }

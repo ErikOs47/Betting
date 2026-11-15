@@ -139,3 +139,47 @@ def test_odds_payload_to_value_bets_and_paper_bet(trained):
     assert best is not None
     bet = paper.place_bet(db, [{k: best[k] for k in ("game_id", "market", "player_id", "selection", "line", "bookmaker")}], stake=2)
     assert bet.price == best["price"] and bet.legs[0]["bookmaker"] == best["bookmaker"]
+
+
+def test_manual_tipico_quotes_drive_value_finder_and_tax(trained):
+    """Without any odds feed: hand-entered quotes are stored with a timestamp and priced like API odds."""
+    from datetime import timedelta
+    from app.db import Game, OddsSnapshot, Prediction, utcnow
+    db = trained
+    for g in db.query(Game).filter(Game.status != "final"):
+        g.tip_utc = utcnow() + timedelta(hours=5)
+    predict_mod.predict_upcoming(db)
+    db.query(Prediction).update({"data_quality": 0.9, "enabled": True})
+    db.commit()
+    from app.api.main import app
+    c = TestClient(app)
+    g = db.query(Game).filter(Game.status != "final").first()
+    p = db.query(Prediction).filter_by(game_id=g.id, market="points", is_latest=True).order_by(Prediction.mean.desc()).first()
+    line = round(p.mean) - 2.5
+    body = {"game_id": g.id, "quotes": [{"market": "points", "player_id": p.player_id, "line": line, "price_a": 1.9, "price_b": 1.9},
+                                        {"market": "moneyline", "price_a": 1.9, "price_b": 1.9},
+                                        {"market": "spread", "line": -3.5, "price_a": 1.9, "price_b": 1.9}]}
+    r = c.post("/api/odds/manual", json=body).json()
+    assert r == {"stored": 6, "fetched_at": r["fetched_at"], "bookmaker": "tipico"}
+    snaps = db.query(OddsSnapshot).filter_by(source="manual", market="spread").all()
+    assert sorted((s.selection, s.line) for s in snaps) == [("away", 3.5), ("home", -3.5)]  # away side gets the mirrored handicap
+    assert len(c.get(f"/api/odds/{g.id}").json()["quotes"]) == 6
+    cands = c.get("/api/value-bets", params={"all": True}).json()["candidates"]
+    assert {x["market"] for x in cands} == {"points", "moneyline", "spread"} and all(x["bookmaker"] == "tipico" for x in cands)
+    over = next(x for x in cands if x["market"] == "points" and x["selection"] == "over")
+    assert over["price_net"] == 1.9 and over["ev"] == pytest.approx(over["p_win"] * 1.9 + over["p_push"] - 1, abs=1e-4)
+    # a 5.3 % payout tax lowers the net price and therefore EV and stake
+    assert c.put("/api/settings/filters", json={"payout_tax": 0.053}).status_code == 200
+    taxed = next(x for x in c.get("/api/value-bets", params={"all": True}).json()["candidates"] if x["market"] == "points" and x["selection"] == "over")
+    assert taxed["price_net"] == pytest.approx(1.9 * 0.947) and taxed["ev"] == pytest.approx(over["ev"] - over["p_win"] * 1.9 * 0.053, abs=1e-4)
+    # model-only fair lines: the minimum price guarantees the configured edge after tax
+    fl = c.get("/api/fair-lines", params={"game_id": g.id}).json()
+    row = next(x for x in fl["lines"] if x["market"] == "points" and x["player_id"] == p.player_id)
+    assert row["fair_a"] == pytest.approx(1 / row["p_a"], abs=0.01)
+    assert row["min_a"] == pytest.approx(1 / (row["p_a"] - fl["min_edge"]) / 0.947, abs=0.01)
+    assert {"moneyline", "spread", "total"} <= {x["market"] for x in fl["lines"]}
+    # quotes for a started game are refused; stale manual quotes fail the filter
+    assert c.post("/api/odds/manual", json={**body, "game_id": "nope"}).status_code == 404
+    db.query(OddsSnapshot).update({"fetched_at": utcnow() - timedelta(hours=4)})
+    db.commit()
+    assert all("odds stale" in x["fail_reasons"] for x in c.get("/api/value-bets", params={"all": True}).json()["candidates"])

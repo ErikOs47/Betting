@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app import settings_store
@@ -16,7 +16,7 @@ from app.betting import paper
 from app.betting import parlay as parlay_mod
 from app.betting.probability import GAME_MARKETS, PLAYER_MARKETS, PRED_MARKET, market_probability
 from app.betting.risk import size_bet
-from app.betting.value import find_value_bets, latest_predictions
+from app.betting.value import current_quotes, fair_lines, find_value_bets, latest_predictions
 from app.config import get_settings
 from app.db import (ApiUsage, BacktestRun, Bet, Game, InjuryEntry, InjuryReport, ModelVersion, OddsSnapshot, Player,
                     PlayerGameStat, Prediction, SourceStatus, TeamGameStat, get_session, init_db, utcnow)
@@ -88,7 +88,7 @@ def status(db: Session = Depends(get_session)) -> dict:
     if age is None or age * 3600 > s.stale_injuries_s:
         warnings.append("Injury report is missing or stale: data quality and confidence are reduced.")
     if not s.odds_api_key:
-        warnings.append("No odds API key configured: the value finder has no bookmaker prices (manual odds entry still works).")
+        warnings.append("No odds API key configured: enter bookmaker quotes manually in the game analysis; the value finder uses them.")
     return {
         "sources": source_health(db),
         "kill_switch": settings_store.get(db, "kill_switch"),
@@ -224,7 +224,7 @@ def _decorate(db: Session, cands: list[dict]) -> list[dict]:
         g = gmap[c["game_id"]]
         c["matchup"], c["tip_utc"] = f"{g.away_id} @ {g.home_id}", iso(g.tip_utc)
         c["fetched_at"] = iso(c["fetched_at"]) if isinstance(c.get("fetched_at"), datetime) else (c["fetched_at"].isoformat() + "Z" if c.get("fetched_at") is not None else None)
-        d = size_bet(p_model=c["p_win"], p_market=c["consensus_prob"], price=c["price"], game_ids=[c["game_id"]], state=state,
+        d = size_bet(p_model=c["p_win"], p_market=c["consensus_prob"], price=c["price_net"], game_ids=[c["game_id"]], state=state,
                      cfg=cfg, p_push=c["p_push"])
         c["stake"] = {"amount": d.stake, "blocked": d.blocked, "reasons": d.reasons, "kelly_full": round(d.kelly_full, 5),
                       "pct_bankroll": round(d.stake / state.bankroll, 5) if state.bankroll else 0}
@@ -269,7 +269,7 @@ def evaluate(leg: Leg, db: Session = Depends(get_session)) -> dict:
     except paper.BetRejected as e:
         raise HTTPException(422, str(e)) from e
     state, cfg = paper.risk_state(db), settings_store.get(db, "risk")
-    d = size_bet(p_model=c["p_win"], p_market=c.get("consensus_prob"), price=c["price"], game_ids=[leg.game_id], state=state, cfg=cfg,
+    d = size_bet(p_model=c["p_win"], p_market=c.get("consensus_prob"), price=c["price_net"], game_ids=[leg.game_id], state=state, cfg=cfg,
                  p_push=c["p_push"])
     c["stake"] = {"amount": d.stake, "blocked": d.blocked, "reasons": d.reasons, "kelly_full": round(d.kelly_full, 5)}
     return c
@@ -292,16 +292,87 @@ def parlay_price(req: ParlayReq, db: Session = Depends(get_session)) -> dict:
             raise HTTPException(404, f"game {gid} not found")
         home_of[gid] = g.home_id
     try:
-        r = parlay_mod.price_parlay(legs, latest_predictions(db, gids), home_of, offered_price=req.offered_price)
+        r = parlay_mod.price_parlay(legs, latest_predictions(db, gids), home_of, offered_price=req.offered_price,
+                                    payout_tax=settings_store.get(db, "filters").get("payout_tax", 0.0))
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     for l in r["legs"]:
         l["description"] = paper.describe_leg(db, l)
     if r["price"] and r["ev"] is not None:
-        d = size_bet(p_model=r["joint_prob"], p_market=None, price=r["price"], game_ids=gids, state=paper.risk_state(db),
+        d = size_bet(p_model=r["joint_prob"], p_market=None, price=r["price_net"], game_ids=gids, state=paper.risk_state(db),
                      cfg=settings_store.get(db, "risk"))
         r["stake"] = {"amount": d.stake, "blocked": d.blocked, "reasons": d.reasons, "kelly_full": round(d.kelly_full, 5)}
     return r
+
+
+# ------------------------------------------------------------------ manual odds (works without any odds feed)
+class ManualQuote(BaseModel):
+    market: str
+    player_id: str | None = None
+    line: float | None = None  # spread: handicap of the HOME team (e.g. -5.5)
+    price_a: float = Field(gt=1)  # over / home
+    price_b: float = Field(gt=1)  # under / away
+
+
+class ManualOdds(BaseModel):
+    game_id: str
+    bookmaker: str = Field(default="tipico", min_length=1, max_length=32, pattern=r"^[a-z0-9_\-]+$")
+    quotes: list[ManualQuote] = Field(min_length=1, max_length=200)
+
+
+@app.post("/api/odds/manual", dependencies=[Depends(require_token)])
+def manual_odds(req: ManualOdds, db: Session = Depends(get_session)) -> dict:
+    """Store hand-entered bookmaker quotes as timestamped snapshots (both sides, so the margin can be removed)."""
+    g = db.get(Game, req.game_id)
+    if g is None:
+        raise HTTPException(404, "game not found")
+    if g.status == "final" or (g.tip_utc is not None and g.tip_utc <= utcnow()):
+        raise HTTPException(422, "game has already started; only pre-game quotes are stored")
+    now, n = utcnow(), 0
+    for q in req.quotes:
+        if q.market not in PLAYER_MARKETS + GAME_MARKETS:
+            raise HTTPException(422, f"unknown market {q.market}")
+        player = None
+        if q.market in PLAYER_MARKETS:
+            player = db.get(Player, q.player_id or "")
+            if player is None:
+                raise HTTPException(422, "player_id required for player markets")
+        if q.market != "moneyline" and q.line is None:
+            raise HTTPException(422, f"line required for {q.market}")
+        sides = ("over", "under") if q.market in PLAYER_MARKETS + ("total",) else ("home", "away")
+        for sel, price in zip(sides, (q.price_a, q.price_b)):
+            line = None if q.market == "moneyline" else (-q.line if (q.market == "spread" and sel == "away") else q.line)
+            db.add(OddsSnapshot(fetched_at=now, source="manual", event_id=f"manual-{g.id}", game_id=g.id, bookmaker=req.bookmaker,
+                                market=q.market, player_id=player.id if player else None, player_name=player.name if player else None,
+                                selection=sel, line=line, price=price, book_updated_at=now))
+            n += 1
+    db.flush()
+    return {"stored": n, "fetched_at": iso(now), "bookmaker": req.bookmaker}
+
+
+@app.delete("/api/odds/manual", dependencies=[Depends(require_token)])
+def delete_manual_odds(game_id: str, bookmaker: str, db: Session = Depends(get_session)) -> dict:
+    """Remove hand-entered quotes of one bookmaker for a game (typo correction). API snapshots are never deleted."""
+    res = db.execute(delete(OddsSnapshot).where(OddsSnapshot.game_id == game_id, OddsSnapshot.bookmaker == bookmaker,
+                                                OddsSnapshot.source == "manual"))
+    return {"deleted": res.rowcount}
+
+
+@app.get("/api/odds/{game_id}")
+def game_odds(game_id: str, db: Session = Depends(get_session)) -> dict:
+    q = current_quotes(db, [game_id])
+    rows = [] if q.empty else [
+        {"bookmaker": r.bookmaker, "source": r.source, "market": r.market, "player_id": r.player_id if isinstance(r.player_id, str) else None,
+         "player_name": r.player_name if isinstance(r.player_name, str) else None, "selection": r.selection,
+         "line": None if r.line != r.line else r.line, "price": r.price, "fetched_at": iso(r.fetched_at.to_pydatetime()), "stale": bool(r.stale)}
+        for r in q.sort_values(["market", "player_name", "bookmaker", "selection"]).itertuples()]
+    return {"quotes": rows}
+
+
+@app.get("/api/fair-lines")
+def fair_lines_api(game_id: str | None = None, db: Session = Depends(get_session)) -> dict:
+    f = settings_store.get(db, "filters")
+    return {"min_edge": f["min_edge"], "payout_tax": f.get("payout_tax", 0.0), "lines": fair_lines(db, game_id)}
 
 
 # ------------------------------------------------------------------ paper bets

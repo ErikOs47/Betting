@@ -28,7 +28,7 @@ test("manual quote: EV equals probability x odds - 1 and feeds the bet builder",
   const games = (await (await request.get("/api/games")).json()).games.filter((g: any) => g.model && g.status !== "final");
   test.skip(games.length === 0, "no upcoming game with a prediction");
   await page.goto(`/games/${games[0].id}`);
-  await page.getByLabel("Markt").selectOption("moneyline");
+  await page.getByTestId("eval-market").selectOption("moneyline");
   await page.getByLabel("Quote", { exact: true }).fill("2.50");
   await page.getByLabel("Gegenquote (optional)").fill("1.55");
   const [resp] = await Promise.all([page.waitForResponse((r) => r.url().includes("/api/evaluate")), page.getByRole("button", { name: "Berechnen" }).click()]);
@@ -58,4 +58,27 @@ test("kill switch blocks paper bets", async ({ page, request }) => {
 test("settings reject limits outside the safe range", async ({ request }) => {
   expect((await request.put("/api/settings/risk", { data: { max_bet_pct: 0.5 } })).status()).toBe(422);
   expect((await request.put("/api/settings/risk", { data: { max_bet_pct: 0.01 } })).status()).toBe(200);
+});
+
+test("hand-entered bookmaker quotes appear in the value finder and can be deleted", async ({ page, request }) => {
+  const games = (await (await request.get("/api/games")).json()).games.filter((g: any) => g.model && g.status !== "final" && new Date(g.tip_utc) > new Date());
+  test.skip(games.length === 0, "no upcoming game with a prediction");
+  const id = games[0].id;
+  await page.goto(`/games/${id}`);
+  await page.getByLabel("Buchmacher", { exact: true }).fill("e2e-test");
+  await page.getByLabel("Moneyline Heim").fill("1,95");
+  await page.getByLabel("Moneyline Auswärts").fill("1,95");
+  await page.getByRole("button", { name: "Quoten speichern" }).click();
+  await expect(page.getByText("1 Märkte gespeichert (e2e-test)")).toBeVisible();
+  const cands = (await (await request.get("/api/value-bets?all=true")).json()).candidates.filter((c: any) => c.bookmaker === "e2e-test");
+  expect(cands.length).toBe(2);
+  expect(cands[0].ev).toBeCloseTo(cands[0].p_win * cands[0].price_net - 1, 3);
+  await page.goto("/value");
+  await page.getByLabel("auch abgelehnte Kandidaten zeigen").check();
+  await expect(page.getByText("e2e-test").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Faire Linien des Modells (ohne Quoten nutzbar)" })).toBeVisible();
+  await page.goto(`/games/${id}`);
+  await page.getByRole("button", { name: "Quoten von e2e-test löschen" }).click();
+  await expect(page.getByRole("button", { name: "Quoten von e2e-test löschen" })).toHaveCount(0);
+  expect((await (await request.get(`/api/odds/${id}`)).json()).quotes.filter((q: any) => q.bookmaker === "e2e-test")).toEqual([]);
 });

@@ -64,7 +64,7 @@ def nearest_psd(m: np.ndarray) -> np.ndarray:
 
 
 def price_parlay(legs: list[dict], preds: dict, home_of: dict, *, offered_price: float | None = None,
-                 n_sims: int = N_SIMS) -> dict:
+                 n_sims: int = N_SIMS, payout_tax: float = 0.0) -> dict:
     """legs: [{game_id, market, player_id, selection, line, price?}], preds as in value.latest_predictions."""
     corr = load_correlations()
     variables: list[tuple] = []
@@ -139,12 +139,13 @@ def price_parlay(legs: list[dict], preds: dict, home_of: dict, *, offered_price:
     prices = [l.get("price") for l in legs]
     product_price = float(np.prod(prices)) if all(p for p in prices) else None
     price = offered_price or product_price
+    net = price * (1.0 - payout_tax) if price else None
     out = {
         "legs": [{k2: v for k2, v in li.items() if k2 not in ("var", "p_win", "p_push")} for li in leg_info],
         "joint_prob": round(p_all, 5), "joint_prob_se": round(se, 5), "prob_with_push": round(p_with_push, 5),
         "independent_prob": round(indep, 5), "correlation_factor": round(p_all / indep, 4) if indep > 0 else None,
         "fair_odds": round(1 / p_all, 3) if p_all > 0 else None, "product_price": product_price, "price": price,
-        "ev": round(p_all * price - 1, 5) if price else None,
+        "price_net": net, "ev": round(p_all * net - 1, 5) if net else None,
         "correlations_available": corr is not None, "same_game": len({l["game_id"] for l in legs}) < len(legs),
         "n_sims": n_sims, "seed": seed, "all_enabled": all(li["enabled"] for li in leg_info),
         "min_data_quality": min(li["data_quality"] for li in leg_info),

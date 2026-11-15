@@ -10,6 +10,7 @@ const FILTERS: Field[] = [
   { key: "min_ev", label: "Mindest-EV", pct: true }, { key: "min_data_quality", label: "Mindest-Datenqualität", pct: true },
   { key: "max_edge", label: "Maximal plausibler Edge", pct: true, hint: "darüber meist fehlende Information" },
   { key: "min_price", label: "Mindestquote" }, { key: "max_price", label: "Höchstquote" },
+  { key: "payout_tax", label: "Wettsteuer auf die Auszahlung", pct: true, hint: "z. B. 5,3 bei deutschen Anbietern, die die Steuer im Gewinnfall abziehen; EV und Einsatz rechnen mit der Netto-Quote" },
 ];
 const RISK: Field[] = [
   { key: "kelly_fraction", label: "Kelly-Anteil", hint: "0,25 = ¼ Kelly" }, { key: "max_bet_pct", label: "Max. Einsatz pro Wette", pct: true },
@@ -17,7 +18,8 @@ const RISK: Field[] = [
   { key: "uncertainty_shrink", label: "Modellgewicht bei Einsatzberechnung", hint: "1 = Modell voll, 0,5 = Mittel aus Modell und Markt" },
   { key: "min_stake", label: "Mindesteinsatz (€)" },
 ];
-const AUTO: Field[] = [{ key: "odds_interval_min", label: "Quoten-Abruf alle … Minuten" }, { key: "props_hours_before_tip", label: "Spieler-Props ab … Stunden vor Tip-off" }];
+const AUTO: Field[] = [{ key: "odds_interval_min", label: "Quoten-Abruf alle … Minuten" }, { key: "props_hours_before_tip", label: "Spieler-Props ab … Stunden vor Tip-off" },
+  { key: "manual_odds_max_age_min", label: "Manuell erfasste Quoten gelten … Minuten" }];
 const JOBS: [string, string][] = [["results", "Ergebnisse & Spielplan"], ["injuries", "Injury Report"], ["odds", "Quoten"], ["predict", "Prognosen"], ["settle", "Wetten abrechnen"], ["train", "Modelle neu trainieren"], ["backtest", "Backtest"], ["all", "Alles aktualisieren"]];
 
 function Group({ title, name, fields, values, onSaved }: { title: string; name: string; fields: Field[]; values: any; onSaved: () => void }) {

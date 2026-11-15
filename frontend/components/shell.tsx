@@ -57,7 +57,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
         {kill && <div className="mb-4"><Notice tone="bad">Kill Switch aktiv seit {data.kill_switch.since?.slice(0, 16).replace("T", " ")} UTC – es werden keine Wetten angenommen.</Notice></div>}
         {data?.warnings?.length > 0 && (
-          <div className="mb-4 space-y-2">{data.warnings.map((w: string) => <Notice key={w} tone="warn">{warnText(w)}</Notice>)}</div>
+          <div className="mb-4 space-y-2">{data.warnings.map((w: string) => <Notice key={w} tone={w.startsWith("No odds API") ? "info" : "warn"}>{warnText(w)}</Notice>)}</div>
         )}
         {children}
       </main>
@@ -73,5 +73,5 @@ function warnText(w: string): string {
 
 const WARN: Record<string, string> = {
   "Injury repor": "Injury Report fehlt oder ist veraltet: Datenqualität und Confidence werden reduziert.",
-  "No odds API ": "Kein Odds-API-Schlüssel konfiguriert: Der Value Finder hat keine Buchmacherquoten. Manuelle Quoteneingabe (Spielanalyse, Bet Builder) funktioniert.",
+  "No odds API ": "Kein Quoten-Feed konfiguriert: Buchmacherquoten (z. B. Tipico) in der Spielanalyse von Hand erfassen – der Value Finder wertet sie aus.",
 };

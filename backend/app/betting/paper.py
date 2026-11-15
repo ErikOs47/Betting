@@ -99,9 +99,10 @@ def quote_single(db: Session, leg: dict) -> dict:
                     alt = [o for o in c["other_books"] if o["bookmaker"] == leg["bookmaker"]]
                     if not alt:
                         continue
-                    c = {**c, "bookmaker": leg["bookmaker"], "price": alt[0]["price"],
-                         "ev": round(expected_value(c["p_win"], alt[0]["price"], c["p_push"]), 5),
-                         "kelly_full": round(kelly_fraction(c["p_win"], alt[0]["price"], c["p_push"]), 5)}
+                    net = alt[0]["price"] * (1.0 - filters.get("payout_tax", 0.0))
+                    c = {**c, "bookmaker": leg["bookmaker"], "price": alt[0]["price"], "price_net": round(net, 4),
+                         "ev": round(expected_value(c["p_win"], net, c["p_push"]), 5),
+                         "kelly_full": round(kelly_fraction(c["p_win"], net, c["p_push"]), 5)}
                 return c
         raise BetRejected("no current bookmaker quote for this selection (odds may have moved)")
     pred = preds.get((leg["game_id"], PRED_MARKET.get(leg["market"], leg["market"]), leg.get("player_id")))
@@ -110,13 +111,14 @@ def quote_single(db: Session, leg: dict) -> dict:
     if not leg.get("price") or leg["price"] <= 1:
         raise BetRejected("a decimal price > 1 is required")
     pr = market_probability(pred["dist"], leg["market"], leg["selection"], leg.get("line"))
+    net = leg["price"] * (1.0 - filters.get("payout_tax", 0.0))
     fair = None
     if leg.get("opposite_price"):
         fair = devig([leg["price"], leg["opposite_price"]])[0]
-    return {**leg, "bookmaker": "manual", "model_prob": round(pr["p"], 5), "p_win": pr["win"], "p_push": pr["push"],
+    return {**leg, "bookmaker": "manual", "price_net": round(net, 4), "model_prob": round(pr["p"], 5), "p_win": pr["win"], "p_push": pr["push"],
             "book_prob": fair, "consensus_prob": fair, "edge": None if fair is None else round(pr["p"] - fair, 5),
-            "ev": round(expected_value(pr["win"], leg["price"], pr["push"]), 5), "fair_odds": round(1 / pr["p"], 3),
-            "kelly_full": round(kelly_fraction(pr["win"], leg["price"], pr["push"]), 5), "confidence": None,
+            "ev": round(expected_value(pr["win"], net, pr["push"]), 5), "fair_odds": round(1 / pr["p"], 3),
+            "kelly_full": round(kelly_fraction(pr["win"], net, pr["push"]), 5), "confidence": None,
             "data_quality": pred["data_quality"], "quality_flags": pred["flags"], "prediction_id": pred["id"],
             "enabled": pred["enabled"], "passes": None, "fail_reasons": [] if pred["enabled"] else ["prediction disabled (data quality)"]}
 
@@ -134,22 +136,24 @@ def place_bet(db: Session, legs: list[dict], *, stake: float | None = None, offe
         c = quote_single(db, legs[0])
         if c.get("fail_reasons") and "prediction disabled (data quality)" in c["fail_reasons"]:
             raise BetRejected("prediction disabled because of insufficient data quality")
-        kind, price, p, p_push, p_mkt = "single", c["price"], c["p_win"], c["p_push"], c.get("consensus_prob")
+        kind, price, p, p_push, p_mkt = "single", c["price_net"], c["p_win"], c["p_push"], c.get("consensus_prob")
         ev, edge, conf, pred_ids = c["ev"], c.get("edge"), c.get("confidence"), [c["prediction_id"]]
         stored = [{k: c.get(k) for k in ("game_id", "market", "player_id", "selection", "line", "price", "bookmaker", "model_prob")}]
     else:
         preds = latest_predictions(db, game_ids)
         home_of = {g: db.get(Game, g).home_id for g in game_ids}
-        r = parlay_mod.price_parlay(legs, preds, home_of, offered_price=offered_price)
+        r = parlay_mod.price_parlay(legs, preds, home_of, offered_price=offered_price,
+                                    payout_tax=settings_store.get(db, "filters").get("payout_tax", 0.0))
         if not r["all_enabled"]:
             raise BetRejected("at least one leg is disabled because of insufficient data quality")
         if not r["price"]:
             raise BetRejected("a price is required (leg prices or an offered combined price)")
-        kind, price, p, p_push, p_mkt = "parlay", r["price"], r["joint_prob"], 0.0, None
+        kind, price, p, p_push, p_mkt = "parlay", r["price_net"], r["joint_prob"], 0.0, None
         ev, edge, conf = r["ev"], None, None
         pred_ids = [preds[(l["game_id"], PRED_MARKET.get(l["market"], l["market"]), l.get("player_id"))]["id"] for l in legs]
         stored = [{k: l.get(k) for k in ("game_id", "market", "player_id", "selection", "line", "price", "bookmaker", "model_prob")} for l in r["legs"]]
         stored[0]["custom_price"] = offered_price
+        stored[0]["payout_tax"] = settings_store.get(db, "filters").get("payout_tax", 0.0)
     if ev <= 0:
         raise BetRejected(f"expected value is not positive ({ev:+.3f})")
     dec = size_bet(p_model=p, p_market=p_mkt, price=price, game_ids=game_ids, state=state, cfg=cfg, p_push=p_push)
@@ -224,7 +228,8 @@ def closing_line_value(db: Session, bet: Bet) -> tuple[float | None, float | Non
     if not mine or not other:
         return None, None
     fair = devig([mine[0].price, other[0].price])[0]
-    return mine[0].price, round(bet.price * fair - 1.0, 5)
+    # CLV measures market movement, so it compares quoted (gross) prices; taxes affect both equally
+    return mine[0].price, round(float(leg["price"]) * fair - 1.0, 5)
 
 
 def settle_open_bets(db: Session) -> dict:
@@ -248,7 +253,7 @@ def settle_open_bets(db: Session) -> dict:
                 elif not live or custom or not all(l.get("price") for l in live):
                     bet.status, payout = "void", bet.stake  # cannot re-price a custom combination with removed legs
                 else:
-                    bet.status, payout = "won", bet.stake * float(np.prod([l["price"] for l in live]))
+                    bet.status, payout = "won", bet.stake * float(np.prod([l["price"] for l in live])) * (1.0 - (bet.legs[0].get("payout_tax") or 0.0))
         bet.pnl = round(payout - bet.stake, 2)
         bet.settled_at = utcnow()
         bet.closing_price, bet.clv = closing_line_value(db, bet)

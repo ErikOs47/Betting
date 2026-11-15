@@ -14,6 +14,7 @@ Web-Dashboard.
 - [Schnellstart mit Docker](#schnellstart-mit-docker)
 - [Lokale Installation ohne Docker](#lokale-installation-ohne-docker)
 - [Daten laden, trainieren, backtesten](#daten-laden-trainieren-backtesten)
+- [Betrieb ohne Quoten-Feed (z. B. mit Tipico)](#betrieb-ohne-quoten-feed-z-b-mit-tipico)
 - [Dashboard](#dashboard)
 - [Ergebnisse mit echten Daten](#ergebnisse-mit-echten-daten)
 - [Tests](#tests)
@@ -25,7 +26,7 @@ Web-Dashboard.
 Voraussetzung: Docker mit Compose.
 
 ```bash
-cp .env.example .env          # NBI_ODDS_API_KEY eintragen (optional, aber nötig für Buchmacherquoten)
+cp .env.example .env          # NBI_ODDS_API_KEY ist optional (ohne: Quoten von Hand erfassen)
 docker compose up --build -d  # PostgreSQL, Redis, API, Celery-Worker/Beat, Web
 
 # Erstbefüllung (einmalig, siehe unten zur Dauer)
@@ -82,6 +83,26 @@ Automatische Aktualisierung ohne Docker: `celery -A app.tasks.celery_app worker 
 **Dauer der Erstbefüllung:** Basketball Reference erlaubt höchstens 20 Anfragen pro Minute; das System lädt deshalb
 einen Boxscore alle 3,3 Sekunden. Eine komplette Saison (≈ 1 320 Spiele inkl. Playoffs) dauert ≈ 75 Minuten. Der
 Download ist jederzeit abbrechbar und setzt beim nächsten Aufruf fort.
+
+## Betrieb ohne Quoten-Feed (z. B. mit Tipico)
+
+Ein Quoten-Abo ist nicht nötig. Tipico bietet keine öffentliche Quoten-API; ein automatischer Abruf der Tipico-Seite
+ist nicht eingebaut (kein offizieller Zugang, widerspricht den Nutzungsbedingungen). Stattdessen:
+
+1. **Faire Linien ansehen** – *Value Finder → Faire Linien des Modells*: je Spiel und Markt die Modell-Linie, die faire
+   Quote und die **Mindestquote**, ab der der Edge-Filter sicher erfüllt ist.
+2. **Quoten erfassen** – *Spielanalyse → Spiel → Buchmacherquoten erfassen*: Moneyline, Handicap, Over/Under und
+   Spieler-Wetten aus der App abtippen (immer beide Seiten). Sie werden mit Zeitstempel und Buchmachername gespeichert.
+3. **Value Finder** wertet die erfassten Quoten wie API-Quoten aus (Margenbereinigung, Edge, EV, Confidence, Einsatz);
+   Paper-Wetten laufen darüber. Wer kurz vor Tip-off erneut erfasst, erhält die Schlussquote für den **CLV**.
+4. **Wettsteuer** – *Einstellungen → Value-Filter → Wettsteuer auf die Auszahlung*: Zieht dein Anbieter im Gewinnfall
+   Steuer von der Auszahlung ab, hier den Satz eintragen (Standard 0). EV, Kelly-Einsatz und Abrechnung rechnen dann
+   mit der Netto-Quote = Quote × (1 − Steuer). Den aktuellen Satz und die Abzugsart bitte beim Anbieter prüfen.
+
+Einschränkungen dieses Betriebs: Mit nur einem Buchmacher gibt es keinen Marktkonsens (die Komponente „Markttiefe“ der
+Confidence ist niedrig), und von Hand erfasste Quoten gelten standardmäßig 180 Minuten als aktuell (einstellbar).
+Ein ROI-Backtest über vergangene Saisons bleibt ohne historische Quoten unmöglich – der Nachweis läuft dann über
+gesammelte Paper-Wetten.
 
 ## Dashboard
 
@@ -148,7 +169,7 @@ Gleicher Spieler Punkte↔Assists +0.18, Punkte↔Rebounds +0.28, Punkte↔Dreie
 ## Tests
 
 ```bash
-cd backend && ../.venv/bin/python -m pytest            # 49 Tests (SQLite)
+cd backend && ../.venv/bin/python -m pytest            # 50 Tests (SQLite)
 NBI_TEST_DATABASE_URL=postgresql+psycopg://nbi:nbi@localhost/nbi ../.venv/bin/python -m pytest   # dieselben Tests gegen PostgreSQL
 
 cd frontend && npm run typecheck && npm run e2e        # Playwright; benötigt laufende API (:8000) und Web (:3000)
@@ -164,9 +185,9 @@ in den Tests; die Anwendung selbst arbeitet ausschließlich mit geladenen echten
 
 ## Grenzen und nächste Schritte
 
-1. **Kein ROI-Nachweis ohne historische Quoten.** Historische Quoten gibt es bei The Odds API nur in bezahlten Tarifen.
-   Solange keine vorliegen, weist der Backtest bewusst keine ROI-, Yield-, CLV- oder Drawdown-Werte aus. Nächster
-   Schritt: Schlüssel eintragen, `historical-odds` für den Testzeitraum laden, `backtest` erneut ausführen.
+1. **Kein ROI-Nachweis ohne historische Quoten.** Solange keine vorliegen, weist der Backtest bewusst keine ROI-,
+   Yield-, CLV- oder Drawdown-Werte aus. Ohne Quoten-Abo läuft der Nachweis über Paper-Wetten mit von Hand erfassten
+   Quoten; mit Abo: `historical-odds` für den Testzeitraum laden und `backtest` erneut ausführen.
 2. **Quoten-Anbindung nicht live getestet.** In der Entwicklungsumgebung lag kein API-Schlüssel vor. Der Client folgt der
    v4-Dokumentation und ist gegen das dokumentierte Antwortformat getestet; der erste echte Abruf sollte beobachtet werden.
 3. **Datenquelle Basketball Reference** ist für den privaten Gebrauch gedacht; die Nutzungsbedingungen untersagen Tools

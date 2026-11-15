@@ -78,6 +78,16 @@ Für jede Seite jedes Zwei-Wege-Markts:
 
 Einseitige Märkte (nur Over ohne Under) werden verworfen, weil die Marge nicht entfernt werden kann.
 
+**Wettsteuer:** Mit einem Steuersatz t auf die Auszahlung wird überall die Netto-Quote = Quote × (1 − t) verwendet
+(EV, Kelly, Quotenbereich, Abrechnung). Der CLV vergleicht dagegen Brutto-Quoten, weil er die Marktbewegung misst.
+
+**Mindestquote ohne Marktdaten:** Eine angebotene Quote enthält die Buchmacher-Marge, die faire Marktwahrscheinlichkeit
+ist also höchstens 1/Quote. Bei Quote ≥ 1 / (p − Mindest-Edge) / (1 − t) ist der Edge-Filter deshalb auch ohne Kenntnis
+der Gegenquote sicher erfüllt (konservative Schranke).
+
+**Von Hand erfasste Quoten** (Quelle `manual`, z. B. Tipico) durchlaufen exakt dieselbe Auswertung wie API-Quoten;
+sie gelten 180 Minuten als aktuell (einstellbar) statt 15 Minuten.
+
 **Confidence (0–100)** – gewichtete Summe aus fünf nachvollziehbaren Komponenten:
 
 | Gewicht | Komponente | Berechnung |

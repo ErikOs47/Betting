@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { use, useState } from "react";
 import { DistChart } from "@/components/charts";
+import { OddsEntry } from "@/components/odds-entry";
 import { Badge, Button, Card, Notice, PageTitle, Scroll, State } from "@/components/ui";
 import { FLAG, MARKET, SEL, api, money, pct, spct, time, useApi, useSlip } from "@/lib/api";
 
@@ -49,7 +50,7 @@ function Evaluator({ gameId, players, game }: { gameId: string; players: any[]; 
     <Card title="Quote prüfen (manuelle Eingabe)">
       <p className="mb-3 text-xs text-ink-3">Linie und Dezimalquote eines Buchmachers eingeben. Mit der Gegenquote wird die Marge entfernt und der Edge gegen die faire Marktwahrscheinlichkeit berechnet.</p>
       <div className="flex flex-wrap items-end gap-3 text-sm">
-        <label className="grid gap-1">Markt<select value={market} onChange={(e) => { setMarket(e.target.value); setRes(null); }}>{Object.keys(MARKET).filter((m) => m !== "parlay").map((m) => <option key={m} value={m}>{MARKET[m]}</option>)}</select></label>
+        <label className="grid gap-1">Markt<select data-testid="eval-market" value={market} onChange={(e) => { setMarket(e.target.value); setRes(null); }}>{Object.keys(MARKET).filter((m) => m !== "parlay").map((m) => <option key={m} value={m}>{MARKET[m]}</option>)}</select></label>
         {isPlayer && <label className="grid gap-1">Spieler<select value={pid} onChange={(e) => { setPid(e.target.value); setRes(null); }}>{players.map((p) => <option key={p.player_id} value={p.player_id}>{p.name} ({p.team})</option>)}</select></label>}
         <label className="grid gap-1">Auswahl<select value={sels.includes(sel) ? sel : sels[0]} onChange={(e) => setSel(e.target.value)}>{sels.map((s) => <option key={s} value={s}>{s === "home" ? game.home : s === "away" ? game.away : SEL[s]}</option>)}</select></label>
         {market !== "moneyline" && <label className="grid gap-1">Linie<input className="w-24" inputMode="decimal" value={line} onChange={(e) => setLine(e.target.value)} placeholder={market === "spread" ? "-5.5" : "24.5"} /></label>}
@@ -122,6 +123,7 @@ export default function GameDetail({ params }: { params: Promise<{ id: string }>
               </State>
             </Card>
           </div>
+          {g.status !== "final" && g.model && <OddsEntry gameId={id} game={g} players={data.players} />}
           {data.players.length > 0 && <Evaluator gameId={id} players={data.players} game={g} />}
           {data.players.length > 0 && (
             <Card title="Spielerprognosen (Erwartungswert · 10–90 %-Bereich)">

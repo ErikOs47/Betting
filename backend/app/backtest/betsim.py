@@ -75,7 +75,7 @@ def simulate(*, preds_by_day: dict, actuals: dict, odds: pd.DataFrame, tips: dic
         for c in build_candidates(q, preds, filters, calib):
             if not c["passes"]:
                 continue
-            dec = size_bet(p_model=c["p_win"], p_market=c["consensus_prob"], price=c["price"], game_ids=[c["game_id"]],
+            dec = size_bet(p_model=c["p_win"], p_market=c["consensus_prob"], price=c["price_net"], game_ids=[c["game_id"]],
                            state=state, cfg=risk_cfg, p_push=c["p_push"])
             if dec.blocked:
                 continue
@@ -84,7 +84,7 @@ def simulate(*, preds_by_day: dict, actuals: dict, odds: pd.DataFrame, tips: dic
             day_bets.append((c, dec.stake))
         for c, stake in day_bets:
             res = outcome(c, actuals[(c["game_id"], c["player_id"])])
-            pnl = stake * (c["price"] - 1) if res == "won" else -stake if res == "lost" else 0.0
+            pnl = stake * (c["price_net"] - 1) if res == "won" else -stake if res == "lost" else 0.0
             bankroll += pnl
             bets.append({"date": str(day), "game_id": c["game_id"], "market": c["market"], "player_id": c["player_id"],
                          "selection": c["selection"], "line": c["line"], "bookmaker": c["bookmaker"], "price": c["price"],
