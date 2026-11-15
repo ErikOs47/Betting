@@ -11,6 +11,7 @@ Web-Dashboard.
 
 ## Inhalt
 
+- [Auf dem Handy nutzen](docs/HANDY.md)
 - [Schnellstart mit Docker](#schnellstart-mit-docker)
 - [Lokale Installation ohne Docker](#lokale-installation-ohne-docker)
 - [Daten laden, trainieren, backtesten](#daten-laden-trainieren-backtesten)
@@ -23,25 +24,25 @@ Web-Dashboard.
 
 ## Schnellstart mit Docker
 
+> **Auf dem Handy nutzen?** Schritt-für-Schritt-Anleitung (eigener Server mit HTTPS, Tailscale oder WLAN):
+> **[docs/HANDY.md](docs/HANDY.md)**
+
 Voraussetzung: Docker mit Compose.
 
 ```bash
-cp .env.example .env          # NBI_ODDS_API_KEY ist optional (ohne: Quoten von Hand erfassen)
-docker compose up --build -d  # PostgreSQL, Redis, API, Celery-Worker/Beat, Web
-
-# Erstbefüllung (einmalig, siehe unten zur Dauer)
-docker compose exec api python -m app.cli ingest 2025 2026 2027
-docker compose exec api python -m app.cli injuries
-docker compose exec api python -m app.cli train
-docker compose exec api python -m app.cli backtest
-docker compose exec api python -m app.cli predict
+cp .env.example .env          # NBI_APP_PASSWORD setzen; NBI_ODDS_API_KEY ist optional
+docker compose up -d --build  # PostgreSQL, Backend (mit Zeitplaner), Web-App
 ```
 
-Dashboard: http://localhost:3000 · API-Dokumentation: http://localhost:8000/docs
+Web-App: http://localhost:3000 (vom Handy im WLAN: `http://IP-des-Rechners:3000`).
 
-Danach hält der Worker alles selbst aktuell (Ergebnisse alle 30 min, Injury Report alle 15 min, Quoten nach
-eingestelltem Intervall und Credit-Budget, Prognosen nach jeder Aktualisierung, Abrechnung der Paper-Wetten,
-wöchentlicher Backtest).
+Beim ersten Start lädt das Backend selbstständig drei Saisons Spieldaten (ca. 4 Stunden, wegen des Limits von
+Basketball Reference), trainiert die Modelle, führt einen Backtest aus und erstellt Prognosen. Danach aktualisiert
+es alles automatisch: Ergebnisse alle 30 min, Injury Report alle 15 min, Quoten nach eingestelltem Intervall und
+Credit-Budget, Prognosen nach jeder Aktualisierung, Abrechnung der Paper-Wetten, wöchentlicher Backtest.
+
+Mit eigener Domain oder `IP.sslip.io` und automatischem HTTPS: `docker compose --profile https up -d --build`
+(Variable `DOMAIN` in `.env`).
 
 ## Lokale Installation ohne Docker
 
@@ -64,8 +65,8 @@ cd ../frontend
 npm install && npm run build && npm start              # Dashboard auf :3000 (BACKEND_URL=http://localhost:8000)
 ```
 
-Automatische Aktualisierung ohne Docker: `celery -A app.tasks.celery_app worker -B` (benötigt Redis) oder per Cron
-`python -m app.cli refresh`.
+Automatische Aktualisierung ohne Docker: API mit `NBI_SCHEDULER=internal` starten (eingebauter Zeitplaner), alternativ
+`celery -A app.tasks.celery_app worker -B` (benötigt Redis) oder per Cron `python -m app.cli refresh`.
 
 ## Daten laden, trainieren, backtesten
 
@@ -169,10 +170,11 @@ Gleicher Spieler Punkte↔Assists +0.18, Punkte↔Rebounds +0.28, Punkte↔Dreie
 ## Tests
 
 ```bash
-cd backend && ../.venv/bin/python -m pytest            # 50 Tests (SQLite)
+cd backend && ../.venv/bin/python -m pytest            # 51 Tests (SQLite)
 NBI_TEST_DATABASE_URL=postgresql+psycopg://nbi:nbi@localhost/nbi ../.venv/bin/python -m pytest   # dieselben Tests gegen PostgreSQL
 
 cd frontend && npm run typecheck && npm run e2e        # Playwright; benötigt laufende API (:8000) und Web (:3000)
+# mit Login:  E2E_PASSWORD=<NBI_APP_PASSWORD> npm run e2e
 ```
 
 Abgedeckt sind u. a.: EV/Kelly/Margenbereinigung, Verteilungen und Push-Logik, alle Einsatzlimits und der Kill Switch,
@@ -197,7 +199,9 @@ in den Tests; die Anwendung selbst arbeitet ausschließlich mit geladenen echten
 5. **Starting Lineups** werden nicht aus einem bestätigten Feed gelesen, sondern über die Starter-Historie angenähert.
 6. **Späte Ausfälle:** Das Training kennt die endgültige Inaktiv-Liste, live gilt der jeweils aktuelle Injury Report
    (siehe [Methodik](docs/METHODIK.md), Abschnitt 1). Wetten kurz vor Tip-off sind dadurch besser abgesichert als frühe.
-7. **Docker-Images** konnten in der Entwicklungsumgebung nicht vollständig gebaut werden (Build-Container ohne
-   Netzwerk); die Compose-Datei ist validiert, die Dienste wurden nativ gegen PostgreSQL 16 getestet.
+7. **Docker:** Beide Images wurden gebaut und getestet (Web-Container mit Login, PWA-Dateien und allen
+   Playwright-Tests; Backend-Container mit eingebautem Zeitplaner gegen PostgreSQL 16). Der komplette
+   `docker compose`-Start inklusive Postgres-Image konnte in der Entwicklungsumgebung nicht laufen, weil Docker Hub
+   von dort aus gedrosselt war.
 8. Empfohlene Reihenfolge vor jeder Überlegung zu echtem Geld: mehrere hundert Paper-Wetten sammeln und prüfen, ob der
    durchschnittliche **CLV positiv** ist. Ohne positiven CLV ist kein langfristiger Vorteil zu erwarten.

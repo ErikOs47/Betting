@@ -23,8 +23,14 @@
        │            ▼
        │   Basketball Reference · NBA Injury Report · The Odds API · SportsDataIO · stats.nba.com
        ▼
-  PostgreSQL (alle Fakten, Quoten-Snapshots, Prognosen, Wetten)   Redis (Celery-Broker)   Artefakte (Modelle, OOS-Prognosen)
+  PostgreSQL (alle Fakten, Quoten-Snapshots, Prognosen, Wetten)   Artefakte (Modelle, OOS-Prognosen)   optional Redis (nur für Celery)
 ```
+
+Betrieb: Standardmäßig läuft der Zeitplaner im Backend-Prozess (`NBI_SCHEDULER=internal`, `app/tasks/scheduler.py`),
+sodass ein Server nur drei Container braucht (PostgreSQL, Backend, Web; optional Caddy für HTTPS). Bei leerer
+Datenbank lädt er zuerst drei Saisons und trainiert. Celery + Redis (`app/tasks/celery_app.py`) bleiben als
+Alternative für größere Installationen erhalten. Die Web-App ist eine installierbare PWA mit optionalem
+Passwort-Login (`frontend/proxy.ts`, Cookie mit HMAC, 90 Tage gültig).
 
 Datenfluss eines Aktualisierungszyklus (`app.tasks.jobs.refresh_all`):
 
@@ -61,7 +67,7 @@ frontend/
   components/            UI-Bausteine, SVG-Charts
   e2e/                   Playwright
 docs/                    Architektur, API-/Kostenanalyse, Methodik, Entwicklungsplan
-docker-compose.yml       db, redis, api, worker, web
+docker-compose.yml       db, api (mit Zeitplaner), web, optional caddy (HTTPS, Profil `https`)
 ```
 
 ## 3. Datenbankschema (PostgreSQL)
