@@ -261,6 +261,27 @@ class LedgerEntry(Base):
     bet_id: Mapped[int | None] = mapped_column(ForeignKey("bets.id"))
 
 
+class Suggestion(Base):
+    """A suggested bet as it was shown before tip-off, settled against the real result afterwards."""
+    __tablename__ = "suggestions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    kind: Mapped[str] = mapped_column(String(10))  # prop | moneyline
+    game_id: Mapped[str] = mapped_column(String(16), index=True)
+    player_id: Mapped[str | None] = mapped_column(String(16))
+    team_id: Mapped[str | None] = mapped_column(String(3))
+    market: Mapped[str] = mapped_column(String(24))
+    selection: Mapped[str] = mapped_column(String(8))
+    line: Mapped[float | None]
+    raw_prob: Mapped[float]  # model probability before the learned correction
+    prob: Mapped[float]  # probability shown to the user (after correction)
+    mu: Mapped[float | None]
+    l10: Mapped[float | None]
+    status: Mapped[str] = mapped_column(String(8), default="open", index=True)  # open|won|lost|void
+    actual: Mapped[float | None]
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 # ------------------------------------------------------------------ operations
 class Setting(Base):
     __tablename__ = "settings"

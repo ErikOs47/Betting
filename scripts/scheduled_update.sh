@@ -20,7 +20,9 @@ if [ ! -x .venv/bin/python ]; then python3 -m venv .venv; fi
 .venv/bin/pip install -q -r backend/requirements.txt >&2
 
 # ---- restore state
-if git fetch -q --depth 1 origin "$STATE_BRANCH" 2>/dev/null; then
+if [ "${NBI_SKIP_RESTORE:-0}" = "1" ]; then
+  log "restore skipped (NBI_SKIP_RESTORE=1): using the local database"
+elif git fetch -q --depth 1 origin "$STATE_BRANCH" 2>/dev/null; then
   TMP="$(mktemp -d)"
   git --work-tree="$TMP" checkout FETCH_HEAD -- . 2>/dev/null
   git reset -q 2>/dev/null || true   # keep the main index clean

@@ -108,16 +108,31 @@ def phone_export(out: str = "../phone/data.json") -> None:
         _p(write(db, Path(out).resolve()))
 
 
+@app.command("suggestion-prior")
+def suggestion_prior(parquet: str, algos: str = "lightgbm,xgboost") -> None:
+    """Replay the suggestion rule on stored out-of-sample backtest predictions and save it as learning prior."""
+    import pandas as pd
+    from app.betting import suggestions
+    init_db()
+    op = pd.read_parquet(parquet)
+    with session_scope() as db:
+        prior = suggestions.backtest_prior(op, algos.split(","))
+        suggestions.store_prior(db, prior, {"start": str(op["date"].min().date()), "end": str(op["date"].max().date()), "n_player_rows": int(len(op))})
+        _p({m: {k: v[k] for k in ("n", "hits", "hit_rate", "expected", "k")} for m, v in prior.items()})
+
+
 @app.command("scheduled-update")
 def scheduled_update(out: str = "../phone/data.json") -> None:
     """One unattended update run: results, injuries, odds, retrain if due, predictions, settlement, phone export."""
     from pathlib import Path
     from app.export.phone import write
     from app.tasks.jobs import refresh_all
+    from app.betting import suggestions
     r = refresh_all()
     with session_scope() as db:
+        r["suggestions"] = {"ok": True, **suggestions.settle(db), **suggestions.record(db)}
         r["export"] = write(db, Path(out).resolve())
-    summary = {k: (v if k == "export" else {"ok": v.get("ok"), "error": v.get("error")}) for k, v in r.items()}
+    summary = {k: (v if k in ("export", "suggestions") else {"ok": v.get("ok"), "error": v.get("error")}) for k, v in r.items()}
     typer.echo(json.dumps(summary, default=str))  # one line, parsed by scripts/scheduled_update.sh
 
 

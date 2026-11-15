@@ -418,30 +418,42 @@ function savedQuotes() {
   try { const l = JSON.parse(store.get("nbi-quotes", "[]")); return Array.isArray(l) ? l.filter((q) => D.games.some((g) => g.id === q.game)) : []; } catch { return []; }
 }
 
-/** Props where the model deviates most from the player's last-10 average (where bookmaker lines usually sit). */
+/** Suggestions recorded by the last update run (server side, so they can be settled and learned from). */
 function candidates(dayIso) {
   const S = D.settings, out = [];
-  for (const g of D.games) {
-    if (gameDay(g) !== dayIso || started(g) || !g.model) continue;
-    for (const pl of g.players) {
-      if (!pl.on || pl.q < 0.7 || (pl.min ?? 0) < 20 || !pl.l10) continue;
-      if ((pl.flags || []).some((f) => ["returning_from_absence", "new_team", "questionable", "few_games"].includes(f))) continue;
-      for (const m of M.PLAYER) {
-        const d = pl.d[m], avg = pl.l10[m];
-        if (!d || avg == null) continue;
-        const line = Math.floor(avg) + 0.5;
-        if (m === "threes" && line < 1.5) continue;
-        const over = M.marketProbability(d, m, "over", line).p;
-        const sel = over >= 0.5 ? "over" : "under", p = Math.max(over, 1 - over);
-        if (p < 0.57 || p > 0.70) continue;  // above 70 %: the average is no longer a plausible line
-        out.push({ g, pl, market: m, sel, line, p, avg, mu: d.mu, fair: 1 / p, minPrice: 1 / (p - S.minEdge) / (1 - tax()) });
-      }
-    }
+  for (const c of (D.suggestions?.open ?? [])) {
+    if (c.market === "moneyline") continue;
+    const g = D.games.find((x) => x.id === c.game);
+    if (!g || gameDay(g) !== dayIso || started(g)) continue;
+    const pl = g.players.find((x) => x.id === c.player);
+    if (!pl) continue;
+    out.push({ g, pl, market: c.market, sel: c.sel, line: c.line, p: c.p, raw: c.raw, avg: c.l10, mu: c.mu,
+      minPrice: 1 / (c.p - S.minEdge) / (1 - tax()) });
   }
-  // one entry per player (PRA overlaps with its parts): keep the strongest
-  const best = new Map();
-  for (const c of out.sort((a, b) => b.p - a.p)) if (!best.has(c.pl.id)) best.set(c.pl.id, c);
-  return [...best.values()].slice(0, 20);
+  return out.sort((a, b) => b.p - a.p).slice(0, 20);
+}
+
+function trackCard() {
+  const T = D.suggestions?.track;
+  if (!T) return "";
+  const live = T.props, bt = T.backtest?.markets ?? {};
+  const btN = Object.values(bt).reduce((a, m) => a + m.n, 0), btH = Object.values(bt).reduce((a, m) => a + m.hits, 0);
+  const btE = btN ? Object.values(bt).reduce((a, m) => a + m.expected * m.n, 0) / btN : null;
+  const rows = M.PLAYER.map((m) => { const l = T.by_market[m], b = bt[m], k = T.learning[m];
+    return `<tr><td>${MARKETS[m]}</td><td class="num">${l.n ? `${l.hits}/${l.n}` : "–"}</td><td class="num">${pct(l.hit_rate, 0)}</td><td class="num">${b ? pct(b.hit_rate, 1) : "–"}</td><td class="num">${k ? dec(k.k, 2) : "–"}</td></tr>`; }).join("");
+  const recent = T.recent.slice(0, 12).map((r) => `<div class="row between"><span>${r.status === "won" ? "✓" : "✗"} ${esc(r.name)} · ${MARKETS[r.market]} ${r.sel === "over" ? "Over" : "Under"} ${dec(r.line, 1)}</span><span class="num muted">${dec(r.actual, 0)}</span></div>`).join("");
+  return `<section class="card"><h3>Trefferquote der Vorschläge</h3>
+    <div class="kpis">
+      <div class="kpi"><div class="k">Seit Start</div><div class="v num">${live.n ? pct(live.hit_rate, 0) : "–"}</div><div class="s num">${live.n ? `${live.hits} von ${live.n}` : "noch keine Ergebnisse"}</div></div>
+      <div class="kpi"><div class="k">Erwartet</div><div class="v num">${live.n ? pct(live.expected, 0) : "–"}</div><div class="s">laut Modell</div></div>
+      <div class="kpi"><div class="k">Rückrechnung</div><div class="v num">${btN ? pct(btH / btN, 1) : "–"}</div><div class="s num">${btN ? `erwartet ${pct(btE, 1)}` : ""}</div></div>
+    </div>
+    <p class="muted" style="margin:0">Gezählt wird, ob die Wette an der genannten Linie eingetreten wäre. Das ist die Treffsicherheit des Modells, nicht dein Gewinn: Der hängt von Linie und Quote deines Buchmachers ab. Spieler ohne Einsatz zählen nicht.${btN ? ` Rückrechnung: dieselbe Regel auf ${btN.toLocaleString("de-DE")} Fälle aus ${T.backtest.period?.start?.slice(0, 7) ?? ""} bis ${T.backtest.period?.end?.slice(0, 7) ?? ""}, die das Modell beim Training nicht kannte.` : ""}</p>
+    <details><summary>Details je Markt und letzte Ergebnisse</summary>
+      <div class="tablewrap" style="margin-top:8px"><table><thead><tr><th>Markt</th><th>Treffer</th><th>Quote</th><th>Rückr.</th><th>Korr.</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="muted">Korrektur: Aus Rückrechnung und laufenden Ergebnissen gelernter Faktor. Unter 1,00 heißt, das Modell war in diesem Markt zu optimistisch; die angezeigten Wahrscheinlichkeiten und „lohnt ab“-Quoten sind bereits entsprechend angepasst. Sieger-Wetten: ${T.moneyline.n ? `${T.moneyline.hits} von ${T.moneyline.n} Favoriten haben gewonnen (erwartet ${pct(T.moneyline.expected, 0)}).` : "noch keine Ergebnisse."}</p>
+      <div class="inj">${recent || `<div class="muted">Die ersten Ergebnisse erscheinen nach dem nächsten Update, sobald Spiele beendet sind.</div>`}</div>
+    </details></section>`;
 }
 
 function openCalc(gid, c) {
@@ -478,11 +490,12 @@ function renderTips() {
     <div class="tabs" role="group" aria-label="Spieltag">${dayTabs}</div>
     <section class="card"><h3>Deine gemerkten Quoten</h3><div class="tips">${savedHtml}</div></section>
     <section class="card"><h3>Kandidaten: Spieler-Wetten</h3>
-      <p class="muted" style="margin:0">Hier weicht das Modell am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Das ist noch keine Empfehlung: Eine Wette lohnt nur, wenn dein Buchmacher <b>diese Linie</b> mindestens zur Quote „lohnt ab“ anbietet. Bei anderer Linie antippen und im Rechner prüfen.</p>
+      <p class="muted" style="margin:0">Hier weicht das Modell am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Jeder Vorschlag wird gespeichert und nach dem Spiel ausgewertet (siehe Trefferquote unten). Das ist noch keine Empfehlung: Eine Wette lohnt nur, wenn dein Buchmacher <b>diese Linie</b> mindestens zur Quote „lohnt ab“ anbietet. Bei anderer Linie antippen und im Rechner prüfen.</p>
       <div class="tips">${candHtml}</div></section>
     <section class="card"><h3>Sieger-Wetten</h3>
       <p class="muted" style="margin:0">Bei Sieger-Wetten ist das Modell im Test nicht besser als eine einfache Stärke-Rangliste. Mit Vorsicht nutzen.</p>
-      <div class="tips">${ml || `<div class="muted">Keine offenen Spiele.</div>`}</div></section></div>`;
+      <div class="tips">${ml || `<div class="muted">Keine offenen Spiele.</div>`}</div></section>
+    ${trackCard()}</div>`;
   document.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { day = b.dataset.day; store.set("nbi-day", day); renderTips(); }));
   document.querySelectorAll("[data-cand]").forEach((b) => b.addEventListener("click", () => { const c = cand[+b.dataset.cand]; openCalc(c.g.id, { market: c.market, sel: c.sel, player: c.pl.id, line: c.line }); }));
   document.querySelectorAll("[data-saved]").forEach((b) => b.addEventListener("click", () => { const { q, g } = saved[+b.dataset.saved]; openCalc(g.id, q); }));

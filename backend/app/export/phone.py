@@ -103,8 +103,19 @@ def build(db: Session, days: int = 2) -> dict:
         "calibration": {k: round(v, 3) for k, v in calibration_scores(db).items()},
         "backtest": None if run is None else {"period": run.metrics.get("period"), "ece": run.metrics.get("calibration_ece")},
         "yesterday": {"date": str(yesterday), "games": results},
+        "suggestions": _suggestions(db, names_all=True),
         "games": out_games,
     }
+
+
+def _suggestions(db: Session, names_all: bool = True) -> dict:
+    from app.betting import suggestions
+    from app.db import Suggestion
+    open_rows = list(db.scalars(select(Suggestion).where(Suggestion.status == "open").order_by(Suggestion.prob.desc())))
+    names = {p.id: p.name for p in db.scalars(select(Player).where(Player.id.in_({s.player_id for s in open_rows if s.player_id})))}
+    return {"open": [{"game": s.game_id, "player": s.player_id, "name": names.get(s.player_id), "team": s.team_id, "market": s.market,
+                      "sel": s.selection, "line": s.line, "p": s.prob, "raw": s.raw_prob, "mu": s.mu, "l10": s.l10} for s in open_rows],
+            "track": suggestions.stats(db)}
 
 
 def write(db: Session, path: Path) -> dict:

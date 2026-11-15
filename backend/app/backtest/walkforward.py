@@ -241,6 +241,8 @@ def run_backtest(db: Session, *, name: str = "walkforward", algos: list[str] | N
         "player": player, "game": game, "folds": folds, "calibration_ece": ece, "correlations": corr["pairs"],
         "odds": odds_simulation(db, op, og, frames, algos, calib), "data_hash": frames.data_hash,
     }
+    from app.betting import suggestions
+    suggestions.store_prior(db, suggestions.backtest_prior(op, algos), metrics["period"])
     run = BacktestRun(name=name, config={"algos": algos, "step_days": step_days, "min_train_days": min_train_days,
                                          "features_player": len(M.PLAYER_FEATURES), "features_game": len(M.GAME_FEATURES)},
                       metrics=metrics, code_sha=code_sha())
