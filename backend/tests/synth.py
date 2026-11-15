@@ -37,6 +37,7 @@ def populate(db, *, n_days: int = 60, start: date = date(2024, 10, 22), season: 
             g = Game(id=gid, season=season, date=day, tip_utc=datetime(day.year, day.month, day.day, 23, 30), home_id=home, away_id=away,
                      status="final" if final else "scheduled")
             db.add(g)
+            db.flush()  # parents first: PostgreSQL enforces foreign keys
             ids.append(gid)
             if not final:
                 continue

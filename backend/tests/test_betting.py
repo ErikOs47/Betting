@@ -125,6 +125,7 @@ def world(db):
     for t in ("BOS", "DAL"):
         db.add(Team(id=t, nba_abbr=t, name=t))
     db.add(Player(id="p1", name="P One", norm_name="pone"))
+    db.flush()
     db.add(Game(id="g1", season=2027, date=tip.date(), tip_utc=tip, home_id="BOS", away_id="DAL"))
     mv = ModelVersion(family="player", algo="lightgbm", version="v-test", artifact_path="x", active=True)
     db.add(mv)

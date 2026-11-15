@@ -2,7 +2,7 @@ import os
 import tempfile
 
 _tmp = tempfile.mkdtemp(prefix="nbi-test-")
-os.environ["NBI_DATABASE_URL"] = f"sqlite:///{_tmp}/test.db"
+os.environ["NBI_DATABASE_URL"] = os.environ.get("NBI_TEST_DATABASE_URL", f"sqlite:///{_tmp}/test.db")
 os.environ["NBI_DATA_DIR"] = _tmp
 os.environ["NBI_ODDS_API_KEY"] = ""
 os.environ["NBI_API_TOKEN"] = ""

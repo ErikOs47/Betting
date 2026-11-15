@@ -1,0 +1,46 @@
+# NBA Betting Intelligence - full stack.   docker compose up --build
+x-backend: &backend
+  build: { context: ., dockerfile: backend/Dockerfile }
+  env_file: .env
+  environment:
+    NBI_DATABASE_URL: postgresql+psycopg://nbi:${POSTGRES_PASSWORD:-nbi}@db:5432/nbi
+    NBI_REDIS_URL: redis://redis:6379/0
+    NBI_DATA_DIR: /app/data
+  volumes: [nbi-data:/app/data]
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: nbi, POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-nbi}", POSTGRES_DB: nbi }
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U nbi"], interval: 5s, timeout: 3s, retries: 10 }
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 10 }
+    restart: unless-stopped
+
+  api:
+    <<: *backend
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"], interval: 15s, timeout: 5s, retries: 5 }
+
+  worker:   # Celery worker + beat: results, injuries, odds, predictions, settlement, weekly backtest
+    <<: *backend
+    command: celery -A app.tasks.celery_app worker -B --loglevel=info --schedule /tmp/celerybeat-schedule
+
+  web:
+    build: { context: frontend }
+    environment:
+      BACKEND_URL: http://api:8000
+      NBI_API_TOKEN: ${NBI_API_TOKEN:-}
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes: { pg-data: {}, nbi-data: {} }

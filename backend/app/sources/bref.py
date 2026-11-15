@@ -6,6 +6,7 @@ Rate limit: Sports Reference bans clients above 20 req/min, so every call is thr
 from __future__ import annotations
 
 import re
+import time
 from datetime import date, datetime
 from pathlib import Path
 
@@ -126,10 +127,15 @@ def fetch_schedule(end_year: int, *, refresh_months: set[str] | None = None) -> 
         cache = _cache("schedule", f"{end_year}-{month}")
         if refresh_months and month in refresh_months and cache.exists():
             cache.unlink()
+        missing = cache.with_suffix(".404")
+        if missing.exists() and time.time() - missing.stat().st_mtime < 86400:
+            continue  # known to have no games (re-checked once a day)
         try:
             html = _get(f"/leagues/NBA_{end_year}_games-{month}.html", cache)
         except SourceError as e:
             if "404" in str(e):
+                missing.parent.mkdir(parents=True, exist_ok=True)
+                missing.touch()
                 continue  # month has no games in this season
             raise
         for g in parse_schedule(html, end_year):

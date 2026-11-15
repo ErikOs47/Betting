@@ -66,7 +66,7 @@ def historical_odds(start: str, end: str, props: bool = False) -> None:
 
 
 @app.command()
-def train(algo: str = "lightgbm", family: str = "all") -> None:
+def train(algo: str = "all", family: str = "all") -> None:
     """Train and register production models on all finished games."""
     from app.ml.registry import train_and_register
     init_db()
