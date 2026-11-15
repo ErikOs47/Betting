@@ -100,6 +100,52 @@ Der Kill Switch (oben rechts) blockiert sofort alle neuen Wetten und Einsatzvors
 ## Ergebnisse mit echten Daten
 
 <!-- RESULTS -->
+Stand: Lauf `walkforward-2-saisons` vom 15.11.2026, Code `fd301b9`. Datenbasis: 1505 gespielte Partien (Saisons 2025-26, 2026-27), Quelle Basketball Reference.
+
+Walk-forward  expandierendes Fenster  6 Blöcke à 30 Tage. Out-of-sample-Zeitraum 2026-02-24 bis 2026-11-13: **13 888 Spieler-Spiele, 568 Partien**.
+
+### Spieler-Props (out-of-sample)
+
+| Markt | MAE LightGBM | MAE XGBoost | MAE Ø letzte 10 | MAE Saison-Ø | Abdeckung 50/80/90 % | Brier (Ensemble) | Brier Basisrate | ECE |
+|---|---|---|---|---|---|---|---|---|
+| Punkte | 4.526 | 4.538 | 4.776 | 4.865 | 49 / 79 / 89 | 0.2346 | 0.2469 | 2.0 % |
+| Rebounds | 1.852 | 1.861 | 1.927 | 1.936 | 50 / 80 / 90 | 0.2355 | 0.2465 | 1.0 % |
+| Assists | 1.325 | 1.333 | 1.381 | 1.397 | 50 / 80 / 90 | 0.2298 | 0.2449 | 1.4 % |
+| Dreier | 0.887 | 0.889 | 0.898 | 0.902 | 50 / 80 / 90 | 0.2150 | 0.2364 | 1.3 % |
+| PRA | 5.914 | 5.926 | 6.321 | 6.468 | 50 / 80 / 89 | 0.2335 | 0.2473 | 1.8 % |
+
+### Spielmärkte (out-of-sample)
+
+| Modell | Moneyline Brier | Log Loss | Trefferquote | ECE | Margin-MAE | Total-MAE |
+|---|---|---|---|---|---|---|
+| LightGBM | 0.1834 | 0.5427 | 71.1 % | 6.1 % | 11.65 | 14.91 |
+| XGBoost | 0.1847 | 0.5463 | 71.1 % | 6.7 % | 11.65 | 14.73 |
+| Ensemble | 0.1835 | 0.5432 | – | 6.2 % | – | – |
+| Elo-Baseline | 0.1796 | 0.5377 | 74.8 % | 4.4 % | 11.67 | 16.34 (Pace×Effizienz) |
+| konstante Heimquote | 0.2445 | 0.6822 | – | – | – | – |
+
+### Geschätzte Korrelationen (Auszug)
+
+Gleicher Spieler Punkte↔Assists +0.19, Punkte↔Rebounds +0.29, Punkte↔Dreier +0.57; Mitspieler Punkte↔Punkte -0.03; Punkte↔Margin des eigenen Teams +0.12, Punkte↔Gesamtpunkte +0.13.
+
+### Wett-Simulation (ROI, Yield, CLV, Drawdown)
+
+**Nicht verfügbar:** Es sind keine historischen Quoten gespeichert, daher werden keine ROI-/CLV-Werte ausgewiesen.
+
+### Einordnung
+
+- **Spieler-Props:** Beide Modelle sind in jedem Markt genauer als die naiven Baselines (Ø letzte 10 Spiele, Saison-Ø),
+  und die Prognoseintervalle treffen ihre Sollabdeckung (50/80/90 %) nahezu exakt – die Verteilungen sind also brauchbar
+  kalibriert. Der Vorsprung im MAE ist klein (wenige Prozent); das ist bei Zählstatistiken mit hoher Zufallsstreuung normal.
+- **Spielmärkte:** Das Boosting-Modell ist **nicht besser als eine einfache Elo-Wertung**. Die Unterschiede zu Elo liegen
+  im Bereich des Stichprobenrauschens. Für Moneyline/Handicap gibt es damit keinen Beleg für einen Modellvorteil; das
+  schlägt sich in einer niedrigen Kalibrierungs-Komponente der Confidence nieder, sodass diese Märkte den
+  Standardfilter (Confidence >= 70) seltener passieren. Nur bei Gesamtpunkten ist das Modell klar besser als die
+  einfache Pace-x-Effizienz-Schätzung.
+- **Wichtig:** Diese Zahlen messen Prognosegüte gegen echte Ergebnisse, **nicht** Profitabilität gegen Buchmacher.
+  Buchmacherlinien enthalten mehr Information als jede hier verwendete Baseline. Ob ein Vorteil gegenüber dem Markt
+  besteht, lässt sich erst mit historischen Quoten bzw. über den CLV gesammelter Paper-Wetten beurteilen.
+<!-- /RESULTS -->
 
 ## Tests
 

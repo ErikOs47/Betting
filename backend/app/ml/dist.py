@@ -74,3 +74,18 @@ def home_win_prob(mu_margin: float, sigma: float) -> float:
     win = stats.norm.sf(0.5, mu_margin, sigma)
     lose = stats.norm.cdf(-0.5, mu_margin, sigma)
     return float(win / (win + lose))
+
+
+def fit_win_scale(mu_margin: np.ndarray, home_win: np.ndarray, start: float) -> float:
+    """Scale s of P(home win) = Phi(mu / s), fitted by Bernoulli maximum likelihood (bounded, shrunk to `start`).
+
+    The shrinkage (weight of 50 pseudo-games on the robust margin scale) keeps small calibration blocks stable."""
+    mu, y = np.asarray(mu_margin, float), np.asarray(home_win, float)
+
+    def nll(s):
+        p = np.clip(stats.norm.cdf(mu / s), 1e-6, 1 - 1e-6)
+        return -(y * np.log(p) + (1 - y) * np.log(1 - p)).sum()
+
+    s_hat = optimize.minimize_scalar(nll, bounds=(7.0, 22.0), method="bounded").x
+    w = len(y) / (len(y) + 50.0)
+    return float(w * s_hat + (1 - w) * start)

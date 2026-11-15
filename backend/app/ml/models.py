@@ -29,6 +29,7 @@ LGB_GAME = dict(objective="regression", learning_rate=0.02, num_leaves=6, min_da
 XGB_GAME = dict(objective="reg:squarederror", eta=0.02, max_depth=3, min_child_weight=30, subsample=0.8,
                 colsample_bytree=0.5, reg_lambda=20.0, tree_method="hist", max_bin=64, seed=SEED, nthread=4, verbosity=0)
 MAX_ROUNDS, EARLY = 1500, 60
+ELO_PER_POINT = 28.0
 
 
 def _fit_gbm(algo: str, params: dict, X: pd.DataFrame, y: np.ndarray, Xv: pd.DataFrame | None, yv: np.ndarray | None,
@@ -137,16 +138,26 @@ class GameModel:
     rho: float = 0.0  # residual correlation margin/total
     info: dict = field(default_factory=dict)
 
+    @staticmethod
+    def base(df: pd.DataFrame, target: str) -> np.ndarray:
+        """Structural prior the boosters correct: Elo-implied margin (28 Elo points ~ 1 point); none for totals."""
+        return df["elo_diff"].to_numpy(float) / ELO_PER_POINT if target == "margin" else np.zeros(len(df))
+
     def fit(self, train: pd.DataFrame, calib_frac: float = 0.2) -> "GameModel":
         params = LGB_GAME if self.algo == "lightgbm" else XGB_GAME
         tr, ca = _split(train, calib_frac)
         res = {}
         for target in ("margin", "total"):
-            b, n = _fit_gbm(self.algo, params, tr[self.features], tr[target].to_numpy(float), ca[self.features], ca[target].to_numpy(float))
-            res[target] = ca[target].to_numpy(float) - _predict(self.algo, b, ca[self.features], n)
-            self.sigma[target] = float(np.sqrt(np.mean(res[target] ** 2)))
+            ytr, yca, yall = (d[target].to_numpy(float) - self.base(d, target) for d in (tr, ca, train))
+            b, n = _fit_gbm(self.algo, params, tr[self.features], ytr, ca[self.features], yca)
+            res[target] = yca - _predict(self.algo, b, ca[self.features], n)
+            # robust scale (MAD): blowouts inflate the RMSE and would make probabilities near the line underconfident
+            self.sigma[target] = float(1.4826 * np.median(np.abs(res[target] - np.median(res[target]))))
+            if target == "margin":
+                mu_ca = ca["margin"].to_numpy(float) - res[target]
+                self.sigma["ml"] = dist.fit_win_scale(mu_ca, (ca["margin"].to_numpy() > 0).astype(float), self.sigma[target])
             n_full = int(n * len(train) / max(1, len(tr)))
-            self.boosters[target], self.rounds[target] = _fit_gbm(self.algo, params, train[self.features], train[target].to_numpy(float), None, None, rounds=n_full)
+            self.boosters[target], self.rounds[target] = _fit_gbm(self.algo, params, train[self.features], yall, None, None, rounds=n_full)
             self.info[target] = {"rounds": n_full, "calib_rmse": round(self.sigma[target], 3), "calib_n": int(len(ca)),
                                  "importance": _importance(self.algo, self.boosters[target], self.features)}
         self.rho = float(np.corrcoef(res["margin"], res["total"])[0, 1]) if len(ca) > 10 else 0.0
@@ -154,9 +165,10 @@ class GameModel:
 
     def predict(self, df: pd.DataFrame) -> pd.DataFrame:
         X = df[self.features]
-        out = pd.DataFrame({"mu_margin": _predict(self.algo, self.boosters["margin"], X),
+        out = pd.DataFrame({"mu_margin": self.base(df, "margin") + _predict(self.algo, self.boosters["margin"], X),
                             "mu_total": _predict(self.algo, self.boosters["total"], X)}, index=df.index)
         out["sigma_margin"], out["sigma_total"] = self.sigma["margin"], self.sigma["total"]
+        out["sigma_ml"] = self.sigma.get("ml", self.sigma["margin"])
         return out
 
 

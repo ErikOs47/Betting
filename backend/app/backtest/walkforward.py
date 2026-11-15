@@ -64,7 +64,7 @@ def run_walkforward(frames: Frames, algos: list[str], step_days: int, min_train_
                     gp = gm.predict(te_g)
                     for c in gp:
                         og[f"{algo}_{c}"] = gp[c].to_numpy()
-                    ph = [dist.home_win_prob(m, gm.sigma["margin"]) for m in gp["mu_margin"]]
+                    ph = [dist.home_win_prob(m, gm.sigma["ml"]) for m in gp["mu_margin"]]
                     fold[f"{algo}_home_brier"] = round(brier(ph, og["home_win"]), 5)
             p_parts.append(op)
             if any(c.endswith("mu_margin") for c in og.columns):
@@ -128,7 +128,7 @@ def eval_games(og: pd.DataFrame, algos: list[str]) -> tuple[dict, dict]:
     for a in algos:
         mu, sg = og[f"{a}_mu_margin"].to_numpy(), og[f"{a}_sigma_margin"].to_numpy()
         mt, st = og[f"{a}_mu_total"].to_numpy(), og[f"{a}_sigma_total"].to_numpy()
-        ph = np.array([dist.home_win_prob(m, s) for m, s in zip(mu, sg)])
+        ph = np.array([dist.home_win_prob(m, s) for m, s in zip(mu, og[f"{a}_sigma_ml"].to_numpy())])
         p_s, p_t = stats.norm.sf(sp_line, mu, sg), stats.norm.sf(to_line, mt, st)
         pm.append(ph), ps.append(p_s), pt.append(p_t)
         og[f"{a}_z_margin"], og[f"{a}_z_total"] = (og["margin"] - mu) / sg, (og["total"] - mt) / st
@@ -207,6 +207,10 @@ def odds_simulation(db: Session, op: pd.DataFrame, og: pd.DataFrame, frames: Fra
             d = {"family": "normal", "mu": getattr(r, f"{a0}_mu_{t}"), "sigma": getattr(r, f"{a0}_sigma_{t}")}
             if a1:
                 d["alt"] = {"mu": getattr(r, f"{a1}_mu_{t}"), "sigma": getattr(r, f"{a1}_sigma_{t}")}
+            if t == "margin":
+                d["sigma_ml"] = getattr(r, f"{a0}_sigma_ml")
+                if a1:
+                    d["alt"]["sigma_ml"] = getattr(r, f"{a1}_sigma_ml")
             day[(r.id, t, None)] = {"id": None, "dist": d, "data_quality": 0.9, "flags": [], "enabled": True, "team_id": r.home_id}
     tips = frames.games.set_index("id")["tip_utc"].to_dict()
     sim = betsim.simulate(preds_by_day=preds_by_day, actuals=actuals, odds=odds, tips=tips,

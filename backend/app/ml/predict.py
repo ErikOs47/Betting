@@ -137,9 +137,13 @@ def predict_upcoming(db: Session, days: int = 2) -> dict:
         for target in ("margin", "total"):
             d = {"family": "normal", "mu": round(float(pred[f"mu_{target}"].iat[i]), 3), "sigma": round(float(model.sigma[target]), 3),
                  "rho": round(float(model.rho), 4)}
+            if target == "margin":
+                d["sigma_ml"] = round(float(model.sigma.get("ml", model.sigma["margin"])), 3)
             if alt is not None:
                 d["alt"] = {"algo": "xgboost", "version": gm["xgboost"][0].version, "mu": round(float(alt[f"mu_{target}"].iat[i]), 3),
                             "sigma": round(float(gm["xgboost"][1].sigma[target]), 3)}
+                if target == "margin":
+                    d["alt"]["sigma_ml"] = round(float(gm["xgboost"][1].sigma.get("ml", gm["xgboost"][1].sigma["margin"])), 3)
             db.add(Prediction(model_version_id=mv.id, game_id=r.id, market=target, player_id=None, team_id=r.home_id, mean=d["mu"],
                               dist=d, features=feats if target == "margin" else {"same_as": "margin"}, inputs_hash=h,
                               data_quality=q, quality_flags=flags, enabled=bool(enabled)))

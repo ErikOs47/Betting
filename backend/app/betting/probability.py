@@ -14,7 +14,7 @@ def _one(d: dict, market: str, selection: str, line: float | None) -> dict[str, 
         win, lose = (p["over"], p["under"]) if selection == "over" else (p["under"], p["over"])
         return {"win": win, "lose": lose, "push": p["push"]}
     if market == "moneyline":
-        ph = dist.home_win_prob(d["mu"], d["sigma"])
+        ph = dist.home_win_prob(d["mu"], d.get("sigma_ml") or d["sigma"])
         win = ph if selection == "home" else 1 - ph
         return {"win": win, "lose": 1 - win, "push": 0.0}
     if market == "spread":
