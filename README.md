@@ -102,7 +102,7 @@ Der Kill Switch (oben rechts) blockiert sofort alle neuen Wetten und Einsatzvors
 <!-- RESULTS -->
 Stand: Lauf `walkforward-2-saisons` vom 15.11.2026, Code `fd301b9`. Datenbasis: 1505 gespielte Partien (Saisons 2025-26, 2026-27), Quelle Basketball Reference.
 
-Walk-forward  expandierendes Fenster  6 Blöcke à 30 Tage. Out-of-sample-Zeitraum 2026-02-24 bis 2026-11-13: **13 888 Spieler-Spiele, 568 Partien**.
+Walk-forward, expandierendes Fenster, 6 Blöcke à 30 Tage. Out-of-sample-Zeitraum 2026-02-24 bis 2026-11-13: **13 888 Spieler-Spiele, 568 Partien**.
 
 ### Spieler-Props (out-of-sample)
 

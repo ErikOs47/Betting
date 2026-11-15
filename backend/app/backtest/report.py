@@ -15,11 +15,12 @@ def render() -> str:
         seasons = list(db.scalars(select(Game.season).where(Game.status == "final").distinct().order_by(Game.season)))
         m, cfg = r.metrics, r.config
     p = m["period"]
+    n_rows = f"{p['n_player_rows']:,}".replace(",", " ")
     out = [f"Stand: Lauf `{r.name}` vom {r.created_at:%d.%m.%Y}, Code `{r.code_sha[:7]}`. Datenbasis: {n_final} gespielte Partien "
            f"(Saisons {', '.join(f'{s - 1}-{str(s)[2:]}' for s in seasons)}), Quelle Basketball Reference.",
            "",
            f"Walk-forward, expandierendes Fenster, {p['n_folds']} Blöcke à {cfg['step_days']} Tage. Out-of-sample-Zeitraum "
-           f"{p['start']} bis {p['end']}: **{p['n_player_rows']:,}".replace(",", " ") + f" Spieler-Spiele, {p['n_games']} Partien**.",
+           f"{p['start']} bis {p['end']}: **{n_rows} Spieler-Spiele, {p['n_games']} Partien**.",
            "", "### Spieler-Props (out-of-sample)", "",
            "| Markt | MAE LightGBM | MAE XGBoost | MAE Ø letzte 10 | MAE Saison-Ø | Abdeckung 50/80/90 % | Brier (Ensemble) | Brier Basisrate | ECE |",
            "|---|---|---|---|---|---|---|---|---|"]
