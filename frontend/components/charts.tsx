@@ -131,7 +131,7 @@ export function DistChart({ pmf, line, side, mean, ariaLabel }: { pmf: number[];
 /** Reliability diagram: predicted vs observed frequency; the diagonal is perfect calibration. */
 export function CalibrationChart({ series, ariaLabel }: { series: { label: string; color: string; bins: { predicted: number; observed: number; n: number }[] }[]; ariaLabel: string }) {
   const [hover, setHover] = useState<{ s: number; i: number } | null>(null);
-  const W = 420, H = 300, m = { l: 44, r: 12, t: 10, b: 34 };
+  const W = 420, H = 300, m = { l: 44, r: 22, t: 10, b: 34 };
   const sx = (v: number) => m.l + v * (W - m.l - m.r), sy = (v: number) => H - m.b - v * (H - m.t - m.b);
   const h = hover ? series[hover.s].bins[hover.i] : null;
   return (

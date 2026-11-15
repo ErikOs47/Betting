@@ -33,7 +33,7 @@ export default function Backtest() {
         {m && (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Stat label="Testzeitraum (out-of-sample)" value={`${m.period.start.slice(2)} – ${m.period.end.slice(2)}`} sub={`Trainingsdaten ab ${m.period.train_from}`} />
+              <Stat label="Testzeitraum (out-of-sample)" value={<span className="text-lg whitespace-nowrap">{fmtD(m.period.start)} – {fmtD(m.period.end)}</span>} sub={`Trainingsdaten ab ${fmtD(m.period.train_from)}`} />
               <Stat label="Testfälle" value={m.period.n_player_rows.toLocaleString("de-DE")} sub={`Spieler-Spiele · ${m.period.n_games} Partien`} />
               <Stat label="Folds" value={m.period.n_folds} sub={`Schrittweite ${run.data.config.step_days} Tage, expandierendes Fenster`} />
               <Stat label="Code / Daten" value={run.data.code_sha?.slice(0, 7) || "–"} sub={`Daten-Hash ${m.data_hash}`} />
@@ -69,7 +69,7 @@ export default function Backtest() {
                           <td>{MARKET[mk]}</td><td className="text-ink-2">{ALGO[a]}</td><td className="num font-medium">{r.mae.toFixed(3)}</td>
                           <td className="num">{r.mae_baseline_l10.toFixed(3)}</td><td className="num">{r.mae_baseline_season.toFixed(3)}</td><td className="num">{r.nll.toFixed(3)}</td>
                           <td className="num">{pct(r.coverage["0.5"], 0)} / {pct(r.coverage["0.8"], 0)} / {pct(r.coverage["0.9"], 0)}</td>
-                          <td className="num">{r.event.brier.toFixed(4)}</td><td className="num">{r.event.brier_base_rate.toFixed(4)}</td><td className="num">{r.event.log_loss.toFixed(4)}</td><td className="num">{pct(r.event.ece, 2)}</td>
+                          <td className="num">{r.event.brier.toFixed(4)}</td><td className="num">{r.event.brier_base_rate.toFixed(4)}</td><td className="num">{r.event.log_loss.toFixed(4)}</td><td className="num whitespace-nowrap">{pct(r.event.ece, 2)}</td>
                         </tr>
                       );
                     }))}
@@ -110,7 +110,7 @@ export default function Backtest() {
                 <LineChart ariaLabel="Punkte-MAE je Fold" series={foldSeries("points_mae")} yFmt={(v) => v.toFixed(2)} xFmt={(v) => m.folds[v - 1]?.start.slice(2, 7) ?? ""} />
                 {m.folds.some((f: any) => f.lightgbm_home_brier != null) && (
                   <div className="mt-4"><div className="mb-1 text-sm font-medium">Moneyline-Brier je Fold</div>
-                    <LineChart ariaLabel="Moneyline-Brier je Fold" series={foldSeries("home_brier")} yFmt={(v) => v.toFixed(3)} xFmt={(v) => m.folds[v - 1]?.start.slice(2, 7) ?? ""} refLine={0.25} /></div>
+                    <LineChart ariaLabel="Moneyline-Brier je Fold" series={foldSeries("home_brier")} yFmt={(v) => v.toFixed(3)} xFmt={(v) => m.folds[v - 1]?.start.slice(2, 7) ?? ""} /></div>
                 )}
               </Card>
             </div>
@@ -128,6 +128,7 @@ export default function Backtest() {
     </>
   );
 }
+const fmtD = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}`;
 const KEYS: [string, string][] = [
   ["same|assists|points", "gleicher Spieler: Punkte ↔ Assists"], ["same|points|rebounds", "gleicher Spieler: Punkte ↔ Rebounds"],
   ["same|assists|rebounds", "gleicher Spieler: Rebounds ↔ Assists"], ["same|points|threes", "gleicher Spieler: Punkte ↔ Dreier"],
