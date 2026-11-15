@@ -95,6 +95,21 @@ details.hint summary::before { content: "i"; display: inline-grid; place-items: 
 details.hint p { margin: 8px 0 0; color: var(--ink-2); font-size: 0.85rem; max-width: 62ch; }
 details.more > summary { cursor: pointer; color: var(--ink-2); font-size: 0.88rem; font-weight: 500; }
 
+/* collapsible categories */
+.cats { display: grid; gap: 10px; }
+details.cat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow); }
+details.cat > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; }
+details.cat > summary::-webkit-details-marker { display: none; }
+details.cat > summary .cat-title { font-family: var(--display); font-weight: 650; font-size: 1rem; }
+details.cat > summary .count { font-size: 0.78rem; color: var(--ink-3); font-variant-numeric: tabular-nums; background: var(--surface-2); border-radius: 999px; padding: 1px 8px; }
+details.cat > summary .cat-sub { flex: 1; min-width: 0; color: var(--ink-3); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+details.cat > summary::after { content: ""; flex: none; width: 8px; height: 8px; border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: rotate(45deg); margin: -4px 4px 0 2px; transition: transform .15s; }
+details.cat[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
+details.cat > .cat-body { border-top: 1px solid var(--line); }
+details.cat > .cat-body > * + * { border-top: 1px solid var(--line); }
+.cat-note { padding: 12px 16px; color: var(--ink-3); font-size: 0.8rem; background: var(--surface-2); }
+.subnav { margin-top: -4px; }
+
 /* list items (tips, saved quotes) */
 .item { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; background: none; border: none; text-align: left; }
 .item:active { background: var(--surface-2); }
@@ -669,30 +684,79 @@ function renderTips() {
       </div>
       <div class="item-side"><span class="pbig num">${pctBig(c.p)}</span>${meter(c.p)}<span class="minq num">ab <b>${dec(c.minPrice)}</b></span></div>
     </button>`;
-  const section = (m, title, hint) => {
-    const rows = cand.filter((c) => c.market === m);
-    return `<div class="section"><div class="sec-head"><h2>${title}</h2><span class="count">${rows.length}</span></div>
-      ${rows.length ? `<div class="list">${rows.map(candRow).join("")}</div>` : `<div class="list"><div class="empty">Keine klaren Kandidaten an diesem Tag.</div></div>`}
-      <details class="hint"><summary>So funktioniert's</summary><p>${hint}</p></details></div>`;
-  };
-  const ml = D.games.filter((g) => gameDay(g) === day && !started(g) && g.model && g.model.on).map((g) => {
-    const p = homeProb(g), fav = p >= 0.5, pf = fav ? p : 1 - p;
-    return `<button type="button" class="item" data-ml="${g.id}" data-sel="${fav ? "home" : "away"}">
-      <div class="item-main"><div class="item-title">${fav ? g.home : g.away} gewinnt</div><div class="item-meta num">${g.away} @ ${g.home} · ${fmtTime(g.tip)}</div></div>
-      <div class="item-side"><span class="pbig num">${pctBig(pf)}</span>${meter(pf)}<span class="minq num">ab <b>${pf - D.settings.minEdge > 0.02 ? dec(1 / (pf - D.settings.minEdge) / (1 - tax())) : "–"}</b></span></div></button>`;
-  }).join("");
-  $("#view").innerHTML = `<div style="display:grid;gap:22px">
-    ${dayPills(days)}
-    ${saved.length ? `<div class="section"><div class="sec-head"><h2>Gemerkte Quoten</h2><span class="count">${saved.length}</span></div>${savedHtml}</div>` : ""}
-    ${section("points", "Punkte", "Hier weicht das Modell am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Die Prozentzahl ist die Wahrscheinlichkeit für die genannte Seite. Lohnt nur, wenn dein Buchmacher diese Linie mindestens zur Quote „ab“ anbietet. Andere Linie? Antippen und im Rechner prüfen.")}
-    ${section("dd", "Double-Double", "Wahrscheinlichkeit, dass der Spieler in mindestens zwei von Punkten, Rebounds und Assists zweistellig wird. Lohnt, wenn die Quote für „Ja“ mindestens „ab“ beträgt.")}
-    ${section("td", "Triple-Double", "Selten und entsprechend hoch quotiert. Gelistet ab 8 % Wahrscheinlichkeit für „Ja“.")}
-    <div class="section"><div class="sec-head"><h2>Sieger</h2><span class="count">${D.games.filter((g) => gameDay(g) === day && !started(g) && g.model && g.model.on).length}</span></div>
-      ${ml ? `<div class="list">${ml}</div>` : `<div class="list"><div class="empty">Keine offenen Spiele.</div></div>`}
-      <details class="hint"><summary>So funktioniert's</summary><p>Favorit des Modells je Spiel. Bei Sieger-Wetten war das Modell im Test nicht besser als eine einfache Stärke-Rangliste; mit Vorsicht nutzen.</p></details></div>
-    <div class="section"><div class="sec-head"><h2>Bilanz</h2></div>${trackCard()}${clvCard()}</div>
-    ${saved.length ? "" : `<p class="muted" style="margin:0;padding-inline:4px">Tipp: Kandidat antippen, Quote deines Buchmachers eintragen und „Quote merken“ wählen. Gemerkte Quoten erscheinen dann oben mit Urteil und Einsatz.</p>`}
+  const mode = store.get("nbi-tipmode", "player") === "team" ? "team" : "player";
+  const openCats = (() => { try { return JSON.parse(store.get("nbi-cats", "null")) ?? { points: true, ml: true }; } catch { return { points: true, ml: true }; } })();
+  const cat = (id, title, rows, note, sub = "") => `<details class="cat" data-cat="${id}" ${openCats[id] ? "open" : ""}>
+      <summary><span class="cat-title">${title}</span><span class="count">${rows.length}</span><span class="cat-sub">${sub}</span></summary>
+      <div class="cat-body">${rows.length ? rows.join("") : `<div class="empty">Keine Einträge an diesem Tag.</div>`}<div class="cat-note">${note}</div></div></details>`;
+  const minQ = (p) => p - D.settings.minEdge > 0.02 ? dec(1 / (p - D.settings.minEdge) / (1 - tax())) : "–";
+  const sideRow = (attrs, title, bet, meta, p) => `<button type="button" class="item" ${attrs}>
+      <div class="item-main"><div class="item-title">${title}</div>${bet ? `<div class="item-bet">${bet}</div>` : ""}<div class="item-meta num">${meta}</div></div>
+      <div class="item-side"><span class="pbig num">${pctBig(p)}</span>${meter(p)}<span class="minq num">ab <b>${minQ(p)}</b></span></div></button>`;
+
+  // ---------------- player bets
+  const playerCat = (m) => cand.filter((c) => c.market === m).map(candRow);
+  const playerHtml = `<div class="cats">
+    ${cat("points", "Punkte", playerCat("points"), "Das Modell weicht hier am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Lohnt nur, wenn dein Buchmacher diese Linie mindestens zur Quote „ab“ anbietet. Andere Linie: antippen und im Rechner prüfen.")}
+    ${cat("dd", "Double-Double", playerCat("dd"), "Mindestens zwei von Punkten, Rebounds und Assists zweistellig. Lohnt, wenn die Quote für „Ja“ mindestens „ab“ beträgt.")}
+    ${cat("td", "Triple-Double", playerCat("td"), "Alle drei zweistellig. Selten und hoch quotiert; gelistet ab 8 % Wahrscheinlichkeit.")}
   </div>`;
+
+  // ---------------- team bets (derived from the game model)
+  const open = D.games.filter((g) => gameDay(g) === day && !started(g) && g.model && g.model.on);
+  const P = D.periods;
+  const team = { ml: [], spread: [], total: [], teams: [], h1: [], q: [], htft: [] };
+  for (const g of open) {
+    const md = g.model.margin, td = g.model.total, muM = ens(md), muT = ens(td), at = `${g.away} @ ${g.home} · ${fmtTime(g.tip)}`;
+    const ph = homeProb(g), fav = ph >= 0.5 ? "home" : "away", pf = Math.max(ph, 1 - ph), favT = g[fav];
+    team.ml.push(sideRow(`data-team="${g.id}|moneyline|${fav}|"`, `${favT} gewinnt`, "", at, pf));
+    // handicap: favourite at the .5 line just below the expected margin
+    const L = Math.floor(Math.abs(muM)) - 0.5, lineFav = -Math.max(0.5, L);
+    const ps = M.marketProbability(md, "spread", fav, lineFav).p;
+    team.spread.push(sideRow(`data-team="${g.id}|spread|${fav}|${lineFav}"`, `${favT} ${String(lineFav).replace(".", ",")}`, "", `${at} · erwartet ${dec(Math.abs(muM), 1)}`, ps));
+    // total points: the more likely side at the .5 line next to the expectation
+    const lt = Math.round(muT) + 0.5, po = M.marketProbability(td, "total", "over", lt).p, ts = po >= 0.5 ? "over" : "under";
+    team.total.push(sideRow(`data-team="${g.id}|total|${ts}|${lt}"`, `${ts === "over" ? "Over" : "Under"} ${dec(lt, 1)}`, "", `${at} · erwartet ${dec(muT, 1)}`, Math.max(po, 1 - po)));
+    if (!P) continue;
+    const pr = (key, sel, line) => { const r = M.derived(P, key, sel, line, muM, muT); return r.win / Math.max(1e-12, r.win + r.lose); };
+    for (const side of ["away", "home"]) {
+      const key = `team_${side}:fg`, mean = M.derivedMean(P, key, muM, muT), ln = Math.round(mean) + 0.5, po2 = pr(key, "over", ln), sel = po2 >= 0.5 ? "over" : "under";
+      team.teams.push(sideRow(`data-team="${g.id}|${key}|${sel}|${ln}"`, `${g[side]} ${sel === "over" ? "Over" : "Under"} ${dec(ln, 1)}`, "", `${at} · erwartet ${dec(mean, 1)}`, Math.max(po2, 1 - po2)));
+    }
+    const hw = pr("win:h1", fav, null);
+    team.h1.push(sideRow(`data-team="${g.id}|win:h1|${fav}|"`, `${favT} führt zur Halbzeit`, "", at, hw));
+    const hm = M.derivedMean(P, "total:h1", muM, muT), hl = Math.round(hm) + 0.5, ho = pr("total:h1", "over", hl), hs = ho >= 0.5 ? "over" : "under";
+    team.h1.push(sideRow(`data-team="${g.id}|total:h1|${hs}|${hl}"`, `1. HZ ${hs === "over" ? "Over" : "Under"} ${dec(hl, 1)}`, "", `${at} · erwartet ${dec(hm, 1)}`, Math.max(ho, 1 - ho)));
+    const qs = ["q1", "q2", "q3", "q4"].map((q) => pr("win:" + q, fav, null));
+    const best = qs.indexOf(Math.max(...qs));
+    team.q.push(sideRow(`data-team="${g.id}|win:q${best + 1}|${fav}|"`, `${favT} gewinnt ${best + 1}. Viertel`, `<span class="num">${qs.map((v, i) => `V${i + 1} ${Math.round(v * 100)} %`).join(" · ")}</span>`, at, qs[best]));
+    const combos = HTFT.map((c) => [c, pr("htft", c, null)]).sort((x, y) => y[1] - x[1]);
+    team.htft.push(sideRow(`data-team="${g.id}|htft|${combos[0][0]}|"`, selName(g, combos[0][0]), "", `${at} · zweitwahrscheinlichste: ${selName(g, combos[1][0])} ${Math.round(combos[1][1] * 100)} %`, combos[0][1]));
+  }
+  const derivedNote = " Aus der Prognose für das ganze Spiel abgeleitet und nicht einzeln gegen Buchmacherquoten geprüft.";
+  const teamHtml = `<div class="cats">
+    ${cat("ml", "Sieger", team.ml, "Favorit des Modells je Spiel. Bei Sieger-Wetten war das Modell im Test nicht besser als eine einfache Stärke-Rangliste; mit Vorsicht nutzen.")}
+    ${cat("spread", "Handicap", team.spread, "Favorit mit der Linie knapp unter dem erwarteten Vorsprung. Bietet dein Buchmacher eine andere Linie, antippen und im Rechner prüfen.")}
+    ${cat("total", "Über/Unter", team.total, "Gesamtpunkte beider Teams an der Linie neben der Erwartung; gezeigt wird die wahrscheinlichere Seite.")}
+    ${cat("teams", "Team-Punkte", team.teams, "Punkte je Team an der Linie neben der Erwartung." + derivedNote)}
+    ${cat("h1", "1. Halbzeit", team.h1, "Halbzeit-Sieger (Unentschieden möglich) und Punkte der ersten Halbzeit." + derivedNote)}
+    ${cat("q", "Viertel", team.q, "Viertel, in dem der Favorit am ehesten vorne liegt; die Zeile zeigt alle vier Viertel. Unentschieden je Viertel möglich." + derivedNote)}
+    ${cat("htft", "Halbzeit/Endstand", team.htft, "Wahrscheinlichste Kombination aus Halbzeit- und Endergebnis (X = Unentschieden zur Halbzeit)." + derivedNote)}
+  </div>`;
+  $("#view").innerHTML = `<div style="display:grid;gap:18px">
+    ${dayPills(days)}
+    <nav class="seg subnav" aria-label="Art der Wette"><button type="button" data-mode="player" aria-pressed="${mode === "player"}">Spieler</button><button type="button" data-mode="team" aria-pressed="${mode === "team"}">Team</button></nav>
+    ${saved.length ? `<div class="section"><div class="sec-head"><h2>Gemerkte Quoten</h2><span class="count">${saved.length}</span></div>${savedHtml}</div>` : ""}
+    ${mode === "player" ? playerHtml : teamHtml}
+    <div class="section"><div class="sec-head"><h2>Bilanz</h2></div>${trackCard()}${clvCard()}</div>
+    ${saved.length ? "" : `<p class="muted" style="margin:0;padding-inline:4px">Tipp: Eintrag antippen, Quote deines Buchmachers eintragen und „Quote merken“ wählen. Gemerkte Quoten erscheinen dann oben mit Urteil und Einsatz.</p>`}
+  </div>`;
+  document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { store.set("nbi-tipmode", b.dataset.mode); renderTips(); }));
+  document.querySelectorAll("details.cat").forEach((d) => d.addEventListener("toggle", () => { openCats[d.dataset.cat] = d.open; store.set("nbi-cats", JSON.stringify(openCats)); }));
+  document.querySelectorAll("[data-team]").forEach((b) => b.addEventListener("click", () => {
+    const [gid, market, sel, line] = b.dataset.team.split("|");
+    openCalc(gid, { market, sel, line: line === "" ? null : +line });
+  }));
   document.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { day = b.dataset.day; store.set("nbi-day", day); renderTips(); }));
   document.querySelectorAll("[data-cand]").forEach((b) => b.addEventListener("click", () => { const c = cand[+b.dataset.cand]; openCalc(c.g.id, { market: c.market, sel: c.sel, player: c.pl.id, line: c.line }); }));
   document.querySelectorAll("[data-saved]").forEach((b) => b.addEventListener("click", () => { const { q, g } = saved[+b.dataset.saved]; openCalc(g.id, q); }));
