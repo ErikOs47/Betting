@@ -92,6 +92,9 @@ select, input { width: 100%; min-width: 0; background: var(--surface-2); border:
 .tipmain { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; flex: 1; min-width: 0; background: none; border: none; text-align: left; }
 .tip.tipmain { background: var(--surface-2); border: 1px solid var(--line); }
 .tipname { font-weight: 600; }
+.tipwrap { display: grid; gap: 6px; }
+.clvform { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.tipdel[data-clv] { font-size: 0.78rem; font-weight: 600; color: var(--accent); }
 .tipright { text-align: right; flex: none; }
 .tipdel { background: none; border: none; border-left: 1px solid var(--line); padding: 0 12px; color: var(--ink-3); }
 .verdictchip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; }
@@ -492,6 +495,31 @@ function compute(g) {
   });
 }
 
+let clvOpen = null;
+/** Closing line value of a saved quote: how much better the taken price was than the closing price.
+    With the opposite closing price the bookmaker margin is removed (price x fair closing probability - 1);
+    otherwise the plain ratio price / closing price - 1 is used. */
+function clvOf(q) {
+  if (!q.closePrice) return null;
+  if (q.closeOpp && !threeWay(q.market)) return { v: q.price * M.devig([q.closePrice, q.closeOpp])[0] - 1, fair: true };
+  return { v: q.price / q.closePrice - 1, fair: false };
+}
+function clvLog() { try { const l = JSON.parse(store.get("nbi-clv", "[]")); return Array.isArray(l) ? l : []; } catch { return []; } }
+function clvCard() {
+  const log = clvLog();
+  if (!log.length) return `<section class="card"><h3>Dein Closing Line Value</h3><p class="muted" style="margin:0">Noch keine Schlussquoten eingetragen. Tippe bei einer gemerkten Quote auf „CLV“ und trage kurz vor Spielbeginn die dann aktuelle Quote ein. Über viele Wetten zeigt der Durchschnitt, ob du regelmäßig bessere Quoten bekommst als der Markt am Ende.</p></section>`;
+  const avg = log.reduce((a, r) => a + r.clv, 0) / log.length, pos = log.filter((r) => r.clv > 0).length;
+  const rows = log.slice().reverse().slice(0, 30).map((r) => `<div class="row between"><span>${esc(r.label)}<span class="muted"> · ${esc(r.game)} · ${r.date.slice(8)}.${r.date.slice(5, 7)}. · ${dec(r.price)} → ${dec(r.close)}</span></span><span class="row" style="gap:6px"><span class="num" style="color:var(${r.clv > 0 ? "--good" : r.clv < 0 ? "--bad" : "--ink-2"})">${spct(r.clv)}</span><button type="button" class="tipdel" style="border:none;padding:0 4px" data-clvdel="${r.ts}" aria-label="Eintrag löschen">✕</button></span></div>`).join("");
+  return `<section class="card"><h3>Dein Closing Line Value</h3>
+    <div class="kpis">
+      <div class="kpi"><div class="k">Ø CLV</div><div class="v num">${spct(avg)}</div><div class="s">${avg > 0 ? "besser als Schlussquote" : "schlechter als Schlussquote"}</div></div>
+      <div class="kpi"><div class="k">Positiv</div><div class="v num">${pos} / ${log.length}</div><div class="s num">${pct(pos / log.length, 0)}</div></div>
+      <div class="kpi"><div class="k">Wetten</div><div class="v num">${log.length}</div><div class="s">${log.length < 50 ? "noch wenig aussagekräftig" : "mit Schlussquote"}</div></div>
+    </div>
+    <p class="muted" style="margin:0">CLV = deine Quote im Vergleich zur Schlussquote. Mit Gegenquote wird die Buchmacher-Marge herausgerechnet, sonst gilt das einfache Verhältnis. Nur vergleichbar, wenn die Linie gleich geblieben ist. Die Liste liegt nur auf diesem Gerät.</p>
+    <details><summary>Einträge</summary><div class="inj" style="margin-top:8px">${rows}</div></details></section>`;
+}
+
 function savedQuotes() {
   try { const l = JSON.parse(store.get("nbi-quotes", "[]")); return Array.isArray(l) ? l.filter((q) => D.games.some((g) => g.id === q.game)) : []; } catch { return []; }
 }
@@ -544,11 +572,18 @@ function renderTips() {
   const dayTabs = days.map((d) => `<button class="tab" data-day="${d}" aria-pressed="${d === day}">${esc(dayLabel(d))}</button>`).join("");
   const saved = savedQuotes().map((q) => { const g = D.games.find((x) => x.id === q.game); return { q, g, a: assess(g, q) }; })
     .filter((x) => x.a && x.a.ev != null).sort((x, y) => (y.a.tone === "good") - (x.a.tone === "good") || y.a.ev - x.a.ev);
-  const savedHtml = saved.length ? saved.map(({ q, g, a }, i) => `<div class="tip">
+  const savedHtml = saved.length ? saved.map(({ q, g, a }, i) => { const cv = clvOf(q); return `<div class="tipwrap"><div class="tip">
       <button type="button" class="tipmain" data-saved="${i}">
-        <div><div class="tipname">${esc(selLabel(g, q))}</div><div class="muted">${g.away} @ ${g.home} · ${fmtTime(g.tip)} Uhr · Quote ${dec(q.price)}</div></div>
-        <div class="tipright"><span class="verdictchip ${a.tone}"><span class="dot ${a.tone}"></span>${a.word}</span><div class="num">EV ${spct(a.ev)}</div><div class="muted num">${a.ev > 0 && !a.noStake ? "Einsatz " + eur(a.st.amount) : ""}</div></div>
-      </button><button type="button" class="tipdel" data-del="${i}" aria-label="Entfernen">✕</button></div>`).join("")
+        <div><div class="tipname">${esc(selLabel(g, q))}</div><div class="muted">${g.away} @ ${g.home} · ${fmtTime(g.tip)} Uhr · Quote ${dec(q.price)}${q.closePrice ? ` · Schluss ${dec(q.closePrice)}` : ""}</div></div>
+        <div class="tipright"><span class="verdictchip ${a.tone}"><span class="dot ${a.tone}"></span>${a.word}</span><div class="num">EV ${spct(a.ev)}</div>${cv ? `<div class="num" style="color:var(${cv.v > 0 ? "--good" : cv.v < 0 ? "--bad" : "--ink-2"})">CLV ${spct(cv.v)}</div>` : `<div class="muted num">${a.ev > 0 && !a.noStake ? "Einsatz " + eur(a.st.amount) : ""}</div>`}</div>
+      </button><button type="button" class="tipdel" data-clv="${i}" aria-expanded="${clvOpen === q.ts}">CLV</button><button type="button" class="tipdel" data-del="${i}" aria-label="Entfernen">✕</button></div>
+      ${clvOpen === q.ts ? `<div class="clvform">
+        <div class="muted">Schlussquote: die Quote für dieselbe Wette und dieselbe Linie kurz vor Spielbeginn.</div>
+        <div class="form">
+          <label>Schlussquote<input id="clvPrice" inputmode="decimal" autocomplete="off" value="${q.closePrice ? dec(q.closePrice) : ""}" placeholder="z. B. 1,80"></label>
+          ${threeWay(q.market) ? "" : `<label>Gegenseite (optional)<input id="clvOpp" inputmode="decimal" autocomplete="off" value="${q.closeOpp ? dec(q.closeOpp) : ""}" placeholder="z. B. 2,00"></label>`}
+        </div>
+        <button type="button" class="tab" data-clvsave="${i}">Speichern</button></div>` : ""}</div>`; }).join("")
     : `<div class="muted">Noch keine Quoten gemerkt. Tippe unten einen Kandidaten an, trage die Quote deines Buchmachers ein und wähle „Quote merken“.</div>`;
   const cand = candidates(day);
   const candRow = (c) => `<button type="button" class="tip tipmain" data-cand="${cand.indexOf(c)}">
@@ -568,6 +603,7 @@ function renderTips() {
   $("#view").innerHTML = `<div style="display:grid;gap:12px">
     <div class="tabs" role="group" aria-label="Spieltag">${dayTabs}</div>
     <section class="card"><h3>Deine gemerkten Quoten</h3><div class="tips">${savedHtml}</div></section>
+    ${clvCard()}
     <section class="card"><h3>Kandidaten: Punkte</h3>
       <p class="muted" style="margin:0">Hier weicht das Modell am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Eine Wette lohnt nur, wenn dein Buchmacher <b>diese Linie</b> mindestens zur Quote „lohnt ab“ anbietet. Bei anderer Linie antippen und im Rechner prüfen.</p>
       <div class="tips">${section("points")}</div></section>
@@ -586,6 +622,24 @@ function renderTips() {
   document.querySelectorAll("[data-cand]").forEach((b) => b.addEventListener("click", () => { const c = cand[+b.dataset.cand]; openCalc(c.g.id, { market: c.market, sel: c.sel, player: c.pl.id, line: c.line }); }));
   document.querySelectorAll("[data-saved]").forEach((b) => b.addEventListener("click", () => { const { q, g } = saved[+b.dataset.saved]; openCalc(g.id, q); }));
   document.querySelectorAll("[data-ml]").forEach((b) => b.addEventListener("click", () => openCalc(b.dataset.ml, { market: "moneyline", sel: b.dataset.sel, line: null })));
+  document.querySelectorAll("[data-clv]").forEach((b) => b.addEventListener("click", () => { const t = saved[+b.dataset.clv].q.ts; clvOpen = clvOpen === t ? null : t; renderTips(); }));
+  document.querySelectorAll("[data-clvsave]").forEach((b) => b.addEventListener("click", () => {
+    const { q, g } = saved[+b.dataset.clvsave];
+    const close = parse($("#clvPrice").value), opp = $("#clvOpp") ? parse($("#clvOpp").value) : null;
+    if (close == null || close <= 1) { $("#clvPrice").focus(); return; }
+    const all = savedQuotes(), mine = all.find((x) => x.ts === q.ts);
+    if (!mine) return;
+    mine.closePrice = close; mine.closeOpp = opp != null && opp > 1 ? opp : null;
+    store.set("nbi-quotes", JSON.stringify(all));
+    const cv = clvOf(mine);
+    const log = clvLog().filter((r) => r.ts !== q.ts);
+    log.push({ ts: q.ts, label: selLabel(g, q), game: `${g.away} @ ${g.home}`, date: gameDay(g), price: q.price, close, clv: cv.v, fair: cv.fair });
+    store.set("nbi-clv", JSON.stringify(log.slice(-200)));
+    clvOpen = null; renderTips();
+  }));
+  document.querySelectorAll("[data-clvdel]").forEach((b) => b.addEventListener("click", () => {
+    store.set("nbi-clv", JSON.stringify(clvLog().filter((r) => r.ts !== +b.dataset.clvdel))); renderTips();
+  }));
   document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
     const x = saved[+b.dataset.del].q;
     store.set("nbi-quotes", JSON.stringify(savedQuotes().filter((q) => q.ts !== x.ts))); renderTips();
