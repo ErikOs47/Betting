@@ -99,5 +99,27 @@ def refresh() -> None:
     _p(refresh_all())
 
 
+@app.command("phone-export")
+def phone_export(out: str = "../phone/data.json") -> None:
+    """Write the data file for the phone page."""
+    from pathlib import Path
+    from app.export.phone import write
+    with session_scope() as db:
+        _p(write(db, Path(out).resolve()))
+
+
+@app.command("scheduled-update")
+def scheduled_update(out: str = "../phone/data.json") -> None:
+    """One unattended update run: results, injuries, odds, retrain if due, predictions, settlement, phone export."""
+    from pathlib import Path
+    from app.export.phone import write
+    from app.tasks.jobs import refresh_all
+    r = refresh_all()
+    with session_scope() as db:
+        r["export"] = write(db, Path(out).resolve())
+    summary = {k: (v if k == "export" else {"ok": v.get("ok"), "error": v.get("error")}) for k, v in r.items()}
+    typer.echo(json.dumps(summary, default=str))  # one line, parsed by scripts/scheduled_update.sh
+
+
 if __name__ == "__main__":
     app()

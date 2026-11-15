@@ -56,7 +56,13 @@ def train_and_register(db: Session, algo: str = "all", family: str = "all", fram
 
 @lru_cache(maxsize=8)
 def load_model(path: str):
-    return M.load(path)
+    """Artifacts are stored with absolute paths; fall back to the configured artifacts folder when the data
+    directory was moved or restored on another machine."""
+    from pathlib import Path
+    p = Path(path)
+    if not p.exists():
+        p = get_settings().artifacts_dir / p.name
+    return M.load(str(p))
 
 
 def active_models(db: Session, family: str) -> dict[str, tuple[ModelVersion, object]]:

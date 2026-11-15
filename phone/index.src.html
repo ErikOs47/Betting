@@ -1,0 +1,393 @@
+<title>NBA Value</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column, scoreboard-style game cards; a game opens as its own view with the quote calculator on top. */
+:root {
+  color-scheme: dark;
+  --bg: #0e1012; --surface: #16191c; --surface-2: #1f2327; --line: #2b3035;
+  --ink: #eef1f3; --ink-2: #b4bcc4; --ink-3: #7e8891;
+  --accent: #4b93f2; --ball: #e2772f;
+  --good: #2fb36d; --warn: #e3a72a; --bad: #e5534b;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  color-scheme: light; --bg: #eef1f4; --surface: #ffffff; --surface-2: #f3f5f7; --line: #d9dee3;
+  --ink: #13171b; --ink-2: #3f4851; --ink-3: #6b757e; --accent: #1f6fd6; --ball: #c75f1a;
+  --good: #19864d; --warn: #9a6a00; --bad: #c23a33; } }
+:root[data-theme="light"] {
+  color-scheme: light; --bg: #eef1f4; --surface: #ffffff; --surface-2: #f3f5f7; --line: #d9dee3;
+  --ink: #13171b; --ink-2: #3f4851; --ink-3: #6b757e; --accent: #1f6fd6; --ball: #c75f1a;
+  --good: #19864d; --warn: #9a6a00; --bad: #c23a33; }
+:root[data-theme="dark"] {
+  color-scheme: dark; --bg: #0e1012; --surface: #16191c; --surface-2: #1f2327; --line: #2b3035;
+  --ink: #eef1f3; --ink-2: #b4bcc4; --ink-3: #7e8891; --accent: #4b93f2; --ball: #e2772f;
+  --good: #2fb36d; --warn: #e3a72a; --bad: #e5534b; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 40px; display: grid; gap: 14px; }
+.num { font-variant-numeric: tabular-nums; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+h1 { font-size: 1.7rem; line-height: 1; }
+h2 { font-size: 1.25rem; }
+h3 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.muted { color: var(--ink-3); font-size: 0.82rem; }
+.row { display: flex; align-items: center; gap: 10px; }
+.between { justify-content: space-between; }
+.wrapflex { flex-wrap: wrap; }
+
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; display: grid; gap: 8px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand svg { flex: none; }
+.chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; font-size: 0.78rem; color: var(--ink-2); background: var(--surface); white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.dot.good { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+.notice { border: 1px solid var(--warn); border-radius: 10px; padding: 10px 12px; background: var(--surface); font-size: 0.88rem; }
+.notice.bad { border-color: var(--bad); }
+
+.tabs { display: flex; gap: 6px; overflow-x: auto; }
+.tab { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 12px; white-space: nowrap; }
+.tab[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); background: var(--surface-2); font-weight: 600; }
+
+.games { display: grid; gap: 8px; }
+.game { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; text-align: left; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.game:active { background: var(--surface-2); }
+.teams { font-family: var(--display); font-size: 1.35rem; font-weight: 700; line-height: 1.1; }
+.teams .at { color: var(--ink-3); font-weight: 600; padding: 0 4px; }
+.prob { font-family: var(--display); font-size: 1.35rem; font-weight: 700; text-align: right; }
+.bar { grid-column: 1 / -1; height: 4px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: flex; }
+.bar span { display: block; height: 100%; }
+.bar .h { background: var(--accent); } .bar .a { background: var(--line); }
+.meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--ink-2); font-size: 0.82rem; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.back { background: none; border: none; color: var(--accent); padding: 4px 0; font-weight: 600; justify-self: start; }
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.kpi { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.kpi .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+.kpi .v { font-family: var(--display); font-size: 1.35rem; font-weight: 700; }
+.kpi .s { font-size: 0.74rem; color: var(--ink-3); }
+
+.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.form label { display: grid; gap: 4px; font-size: 0.78rem; color: var(--ink-2); min-width: 0; }
+.form .full { grid-column: 1 / -1; }
+select, input { width: 100%; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font-size: 16px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
+.seg button { border: none; background: none; border-radius: 6px; padding: 7px 4px; color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
+.result { display: grid; gap: 10px; }
+.verdict { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 10px 12px; border: 1px solid var(--line); background: var(--surface-2); }
+.verdict.good { border-color: var(--good); } .verdict.bad { border-color: var(--bad); } .verdict.warn { border-color: var(--warn); }
+.verdict b { font-family: var(--display); font-size: 1.2rem; }
+.reasons { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 0.84rem; }
+
+.dist svg { width: 100%; height: auto; display: block; }
+.dist text { fill: var(--ink-3); font: 11px var(--body); }
+
+.tablewrap { overflow-x: auto; margin-inline: -14px; padding-inline: 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th { text-align: right; font-weight: 500; color: var(--ink-3); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 6px; white-space: nowrap; }
+td { text-align: right; padding: 8px 6px; border-top: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+td.player { white-space: normal; min-width: 8.5rem; }
+td.player button { background: none; border: none; padding: 0; color: var(--ink); font-weight: 600; text-align: left; }
+.dim { opacity: 0.55; }
+.inj { display: grid; gap: 6px; font-size: 0.86rem; }
+.inj .st { font-size: 0.72rem; font-weight: 600; border-radius: 6px; padding: 1px 6px; border: 1px solid var(--line); }
+.st.Out, .st.Doubtful { color: var(--bad); border-color: var(--bad); }
+.st.Questionable { color: var(--warn); border-color: var(--warn); }
+details summary { cursor: pointer; color: var(--ink-2); }
+footer { color: var(--ink-3); font-size: 0.78rem; display: grid; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="row between">
+      <div class="brand">
+        <svg width="30" height="30" viewBox="0 0 512 512" aria-hidden="true"><circle cx="256" cy="256" r="150" fill="none" stroke="var(--ball)" stroke-width="30"/><path d="M256 106v300M106 256h300M150 150c45 40 70 70 70 106s-25 66-70 106M362 150c-45 40-70 70-70 106s25 66 70 106" fill="none" stroke="var(--ball)" stroke-width="22" stroke-linecap="round"/><path d="M170 360l60-55 45 30 70-85" fill="none" stroke="var(--accent)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h1>NBA Value</h1>
+      </div>
+      <button class="tab" id="settingsBtn" aria-expanded="false" aria-controls="settings">Einstellungen</button>
+    </div>
+    <div class="chips" id="status"><span class="chip"><span class="dot"></span>Lade Daten …</span></div>
+  </header>
+
+  <section class="card" id="settings" hidden>
+    <h3>Einstellungen auf diesem Gerät</h3>
+    <div class="form">
+      <label>Bankroll (€)<input id="bankroll" inputmode="decimal" autocomplete="off"></label>
+      <label>Wettsteuer auf Gewinn (%)<input id="tax" inputmode="decimal" autocomplete="off"></label>
+    </div>
+    <p class="muted">Die Daten werden täglich um ca. 7:50 und 16:50 Uhr aktualisiert. Für ein zusätzliches Update schreib Claude in der Claude-Code-Sitzung dieses Projekts „NBA-Update jetzt“. Einsatzvorschläge: ¼ Kelly, höchstens <span id="maxBetTxt">1 %</span> der Bankroll pro Wette.</p>
+  </section>
+
+  <div id="notices"></div>
+  <main id="view"></main>
+
+  <footer>
+    <div id="modelInfo"></div>
+    <div>Nur Analyse und Paper Betting, keine Gewinngarantie. Glücksspiel kann süchtig machen: BZgA-Hotline 0800 1 37 27 00.</div>
+  </footer>
+</div>
+
+<script>/*NBMATH*/</script>
+<script>
+"use strict";
+const M = window.NBMath;
+const MARKETS = { moneyline: "Sieger", spread: "Handicap", total: "Gesamtpunkte", points: "Punkte", rebounds: "Rebounds", assists: "Assists", threes: "Dreier", pra: "PRA" };
+const SHORT = { points: "PTS", rebounds: "REB", assists: "AST", threes: "3P", pra: "PRA" };
+const FLAGS = { few_games: "wenige Spiele", returning_from_absence: "Rückkehr nach Pause", new_team: "neues Team", injury_report_stale: "Injury Report alt",
+  questionable: "fraglich", probable: "wahrscheinlich dabei", low_minutes: "wenig Spielzeit", results_stale: "Ergebnisse fehlen" };
+let D = null, day = null;
+const calc = { market: "moneyline", sel: "home", player: null, line: "", price: "", opp: "" };
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pct = (v, d = 1) => v == null || !isFinite(v) ? "–" : (v * 100).toFixed(d).replace(".", ",") + " %";
+const spct = (v, d = 1) => v == null || !isFinite(v) ? "–" : (v >= 0 ? "+" : "") + pct(v, d);
+const dec = (v, d = 2) => v == null || !isFinite(v) ? "–" : v.toFixed(d).replace(".", ",");
+const eur = (v) => v == null ? "–" : v.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+const parse = (s) => { const v = parseFloat(String(s).replace(",", ".")); return isFinite(v) ? v : null; };
+const fmtTime = (iso) => new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+const fmtWhen = (iso) => new Date(iso).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const fmtShort = (iso) => new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(",", "");
+const ageH = (iso) => (Date.now() - new Date(iso).getTime()) / 3.6e6;
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+const gameDay = (g) => `${g.id.slice(0, 4)}-${g.id.slice(4, 6)}-${g.id.slice(6, 8)}`;
+const dayLabel = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit" });
+const bankroll = () => parse(store.get("nbi-bankroll", "")) ?? D.settings.bankroll;
+const tax = () => { const v = parse(store.get("nbi-tax", "")); return v == null ? D.settings.payoutTax : v / 100; };
+const started = (g) => new Date(g.tip).getTime() <= Date.now();
+
+async function load() {
+  try {
+    const r = await fetch("data.json", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    D = await r.json();
+  } catch (e) {
+    $("#status").innerHTML = `<span class="chip"><span class="dot bad"></span>Daten konnten nicht geladen werden</span>`;
+    $("#view").innerHTML = `<div class="notice bad">Die Datei mit den Prognosen fehlt oder ist beschädigt (${esc(e.message)}). Bitte Claude um ein Update.</div>`;
+    return;
+  }
+  const days = [...new Set(D.games.map(gameDay))].sort();
+  day = days.includes(store.get("nbi-day", "")) ? store.get("nbi-day") : days[0];
+  renderStatus(); renderSettings(); route();
+}
+
+function renderStatus() {
+  const age = ageH(D.generatedAt), inj = D.data.injuryReport ? ageH(D.data.injuryReport) : null;
+  const chips = [
+    `<span class="chip"><span class="dot ${age < 13 ? "good" : "warn"}"></span>Stand ${fmtShort(D.generatedAt)}</span>`,
+    `<span class="chip"><span class="dot ${inj != null && inj < 6 ? "good" : "warn"}"></span>Verletzungen ${D.data.injuryReport ? fmtShort(D.data.injuryReport) : "fehlen"}</span>`,
+    `<span class="chip"><span class="dot ${D.data.staleResults ? "bad" : "good"}"></span>Ergebnisse bis ${new Date(D.data.lastResult + "T12:00:00").toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}</span>`,
+  ];
+  $("#status").innerHTML = chips.join("");
+  const n = [];
+  if (age >= 13) n.push(`<div class="notice">Die Daten sind ${Math.round(age)} Stunden alt. Verletzungen und Aufstellungen können sich seitdem geändert haben. Für ein Update Claude in der Claude-Code-Sitzung dieses Projekts „NBA-Update jetzt“ schreiben.</div>`);
+  if (D.data.staleResults) n.push(`<div class="notice bad">Für ${D.data.staleResults} vergangene Spiele fehlen Ergebnisse. Die Prognosen sind deshalb deaktiviert.</div>`);
+  $("#notices").innerHTML = n.join("");
+  const bt = D.backtest?.period;
+  $("#modelInfo").textContent = `Modelle LightGBM + XGBoost, trainiert bis ${D.data.trainEnd ?? "–"} auf ${D.data.finalGames} Spielen` +
+    (bt ? `; geprüft out-of-sample vom ${bt.start} bis ${bt.end} (${bt.n_player_rows.toLocaleString("de-DE")} Spieler-Spiele).` : ".");
+}
+
+function renderSettings() {
+  $("#bankroll").value = String(bankroll()).replace(".", ",");
+  $("#tax").value = String(+(tax() * 100).toFixed(2)).replace(".", ",");
+  $("#maxBetTxt").textContent = pct(D.settings.maxBet, 0);
+}
+$("#settingsBtn").addEventListener("click", () => { const s = $("#settings"); s.hidden = !s.hidden; $("#settingsBtn").setAttribute("aria-expanded", String(!s.hidden)); });
+$("#bankroll").addEventListener("change", (e) => { const v = parse(e.target.value); if (v != null && v > 0) store.set("nbi-bankroll", String(v)); renderSettings(); route(); });
+$("#tax").addEventListener("change", (e) => { const v = parse(e.target.value); if (v != null && v >= 0 && v < 20) store.set("nbi-tax", String(v)); renderSettings(); route(); });
+
+function route() {
+  if (!D) return;
+  const m = location.hash.match(/^#spiel-([0-9]{9}[A-Z]{3})$/);
+  const g = m && D.games.find((x) => x.id === m[1]);
+  if (g) renderGame(g); else renderList();
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+
+function homeProb(g) { return g.model ? M.marketProbability(g.model.margin, "moneyline", "home", null).p : null; }
+
+function renderList() {
+  const days = [...new Set(D.games.map(gameDay))].sort();
+  const games = D.games.filter((g) => gameDay(g) === day);
+  const tabs = days.map((d) => `<button class="tab" data-day="${d}" aria-pressed="${d === day}">${esc(dayLabel(d))}</button>`).join("");
+  const cards = games.map((g) => {
+    const p = homeProb(g);
+    const m = g.model;
+    const meta = m ? [
+      `<span class="num">fair ${dec(1 / p)} / ${dec(1 / (1 - p))}</span>`,
+      `<span class="num">Margin ${m.margin.mu > 0 ? "+" : ""}${dec(m.margin.mu, 1)}</span>`,
+      `<span class="num">Total ${dec(m.total.mu, 1)}</span>`,
+      m.on ? "" : `<span style="color:var(--warn)">Prognose deaktiviert</span>`,
+      started(g) ? `<span>läuft / beendet</span>` : "",
+    ].join("") : `<span>keine Prognose</span>`;
+    return `<a class="game" href="#spiel-${g.id}" style="text-decoration:none;color:inherit">
+      <div><div class="teams">${g.away}<span class="at">@</span>${g.home}</div><div class="muted">${fmtTime(g.tip)} Uhr · ${esc(g.awayName)} bei ${esc(g.homeName)}</div></div>
+      <div><div class="prob num">${p == null ? "–" : pct(p, 0)}</div><div class="muted" style="text-align:right">${g.home} gewinnt</div></div>
+      ${p == null ? "" : `<div class="bar" aria-hidden="true"><span class="h" style="width:${p * 100}%"></span><span class="a" style="width:${(1 - p) * 100}%"></span></div>`}
+      <div class="meta">${meta}</div></a>`;
+  }).join("");
+  const y = D.yesterday.games.length ? `<details class="card"><summary>Ergebnisse vom ${esc(dayLabel(D.yesterday.date))}</summary><div class="inj num">${
+    D.yesterday.games.map((r) => `<div class="row between"><span>${r.away} @ ${r.home}</span><span>${r.ap} : ${r.hp}</span></div>`).join("")}</div></details>` : "";
+  $("#view").innerHTML = `<div style="display:grid;gap:12px"><div class="tabs" role="group" aria-label="Spieltag">${tabs}</div>
+    <div class="games">${cards || `<div class="card muted">An diesem Tag sind keine Spiele angesetzt.</div>`}</div>${y}</div>`;
+  document.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { day = b.dataset.day; store.set("nbi-day", day); renderList(); }));
+}
+
+function defaultLine(g) {
+  const m = calc.market;
+  if (m === "moneyline") return "";
+  if (m === "spread") { const mu = g.model.margin.mu; return String(-(Math.round(mu) + (mu >= 0 ? 0.5 : -0.5))).replace(".", ","); }
+  if (m === "total") return String(Math.round(g.model.total.mu) + 0.5).replace(".", ",");
+  const p = g.players.find((x) => x.id === calc.player), d = p?.d[m];
+  return d ? String(M.nbQuantile(0.5, d.mu, d.alpha) - 0.5).replace(".", ",") : "";
+}
+
+function renderGame(g) {
+  if (!g.model) { $("#view").innerHTML = `<a class="back" href="#">← Alle Spiele</a><div class="card">Für dieses Spiel gibt es keine Prognose.</div>`; return; }
+  if (calc.game !== g.id) Object.assign(calc, { game: g.id, market: "moneyline", sel: "home", player: g.players[0]?.id ?? null, line: "", price: "", opp: "" });
+  const p = homeProb(g), m = g.model;
+  const inj = (side) => (g.injuries[side].length ? g.injuries[side].map((i) => `<div class="row between"><span>${esc(i.name)}<span class="muted"> · ${esc(i.reason)}</span></span><span class="st ${esc(i.status)}">${esc(i.status)}</span></div>`).join("") : `<div class="muted">keine Meldungen</div>`);
+  const rows = g.players.map((pl) => `<tr class="${pl.on ? "" : "dim"}"><td class="player"><button data-player="${pl.id}">${esc(pl.name)}</button><div class="muted">${pl.team} · ${dec(pl.min, 0)} Min${pl.flags.filter((f) => f !== "injury_report_stale").map((f) => " · " + (FLAGS[f] ?? f)).join("")}</div></td>${
+    M.PLAYER.map((k) => `<td class="num">${pl.d[k] ? dec(pl.d[k].mu, 1) : "–"}</td>`).join("")}</tr>`).join("");
+  $("#view").innerHTML = `
+    <div style="display:grid;gap:12px">
+      <a class="back" href="#">← Alle Spiele</a>
+      <div><h2>${esc(g.awayName)} @ ${esc(g.homeName)}</h2><div class="muted">${fmtWhen(g.tip)} Uhr · Datenqualität ${pct(m.q, 0)}${m.on ? "" : " · Prognose deaktiviert"}</div></div>
+      ${started(g) ? `<div class="notice">Das Spiel hat bereits begonnen. Die Prognose gilt nur vor dem Spiel; Live-Quoten sind damit nicht vergleichbar.</div>` : ""}
+      <div class="kpis">
+        <div class="kpi"><div class="k">${g.home} gewinnt</div><div class="v num">${pct(p, 0)}</div><div class="s num">fair ${dec(1 / p)} / ${dec(1 / (1 - p))}</div></div>
+        <div class="kpi"><div class="k">Margin ${g.home}</div><div class="v num">${m.margin.mu > 0 ? "+" : ""}${dec(m.margin.mu, 1)}</div><div class="s num">± ${dec(m.margin.sigma, 1)}</div></div>
+        <div class="kpi"><div class="k">Gesamtpunkte</div><div class="v num">${dec(m.total.mu, 1)}</div><div class="s num">± ${dec(m.total.sigma, 1)}</div></div>
+      </div>
+      <section class="card" aria-labelledby="calcTitle">
+        <h3 id="calcTitle">Quote prüfen</h3>
+        <div class="form">
+          <label class="full">Markt<select id="cMarket">${Object.entries(MARKETS).map(([k, v]) => `<option value="${k}" ${k === calc.market ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+          <label class="full" id="cPlayerWrap">Spieler<select id="cPlayer">${g.players.map((pl) => `<option value="${pl.id}" ${pl.id === calc.player ? "selected" : ""}>${esc(pl.name)} (${pl.team})</option>`).join("")}</select></label>
+          <div class="full seg" role="group" aria-label="Auswahl" id="cSel"></div>
+          <label id="cLineWrap">Linie<input id="cLine" inputmode="decimal" autocomplete="off"></label>
+          <label>Quote<input id="cPrice" inputmode="decimal" placeholder="z. B. 1,90" autocomplete="off"></label>
+          <label class="full">Quote der Gegenseite (optional, für Edge und Marge)<input id="cOpp" inputmode="decimal" placeholder="z. B. 1,90" autocomplete="off"></label>
+        </div>
+        <div class="result" id="cResult" aria-live="polite"></div>
+      </section>
+      <section class="card"><h3>Verletzungen</h3><div class="inj"><strong>${esc(g.awayName)}</strong>${inj("away")}<strong>${esc(g.homeName)}</strong>${inj("home")}</div>
+        <div class="muted">Offizieller NBA Injury Report, Stand ${D.data.injuryReport ? fmtWhen(D.data.injuryReport) : "–"}.</div></section>
+      <section class="card"><h3>Spieler: erwartete Werte</h3>
+        <div class="tablewrap"><table><thead><tr><th>Spieler</th>${M.PLAYER.map((k) => `<th>${SHORT[k]}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
+        <div class="muted">Antippen übernimmt den Spieler in „Quote prüfen“.</div></section>
+    </div>`;
+  const bind = () => {
+    calc.line = $("#cLine").value; calc.price = $("#cPrice").value; calc.opp = $("#cOpp").value; compute(g);
+  };
+  $("#cMarket").addEventListener("change", (e) => { calc.market = e.target.value; calc.sel = ["moneyline", "spread"].includes(calc.market) ? "home" : "over"; calc.line = defaultLine(g); calc.price = ""; calc.opp = ""; syncForm(g); });
+  $("#cPlayer").addEventListener("change", (e) => { calc.player = e.target.value; calc.line = defaultLine(g); syncForm(g); });
+  ["#cLine", "#cPrice", "#cOpp"].forEach((s) => $(s).addEventListener("input", bind));
+  document.querySelectorAll("[data-player]").forEach((b) => b.addEventListener("click", () => {
+    calc.player = b.dataset.player; if (!M.PLAYER.includes(calc.market)) { calc.market = "points"; calc.sel = "over"; }
+    calc.line = defaultLine(g); calc.price = ""; calc.opp = ""; syncForm(g); $("#calcTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  if (calc.line === "") calc.line = defaultLine(g);
+  syncForm(g);
+}
+
+function syncForm(g) {
+  const isP = M.PLAYER.includes(calc.market);
+  $("#cMarket").value = calc.market;
+  $("#cPlayerWrap").hidden = !isP;
+  $("#cLineWrap").hidden = calc.market === "moneyline";
+  if (calc.player) $("#cPlayer").value = calc.player;
+  const sels = ["moneyline", "spread"].includes(calc.market) ? [["home", g.home], ["away", g.away]] : [["over", "Over"], ["under", "Under"]];
+  $("#cSel").innerHTML = sels.map(([k, v]) => `<button type="button" data-sel="${k}" aria-pressed="${calc.sel === k}">${v}</button>`).join("");
+  $("#cSel").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    if (calc.market === "spread" && b.dataset.sel !== calc.sel) { const l = parse(calc.line); if (l != null) calc.line = String(-l).replace(".", ","); }
+    calc.sel = b.dataset.sel; syncForm(g);
+  }));
+  $("#cLine").value = calc.line; $("#cPrice").value = calc.price; $("#cOpp").value = calc.opp;
+  $("#cLineWrap").firstChild.textContent = calc.market === "spread" ? `Handicap ${calc.sel === "home" ? g.home : g.away}` : "Linie";
+  compute(g);
+}
+
+function distFor(g) {
+  if (calc.market === "moneyline" || calc.market === "spread") return { d: g.model.margin, on: g.model.on, q: g.model.q, flags: g.model.flags };
+  if (calc.market === "total") return { d: g.model.total, on: g.model.on, q: g.model.q, flags: g.model.flags };
+  const p = g.players.find((x) => x.id === calc.player);
+  return p && p.d[calc.market] ? { d: p.d[calc.market], on: p.on, q: p.q, flags: p.flags, name: p.name } : null;
+}
+
+function compute(g) {
+  const box = $("#cResult");
+  const src = distFor(g);
+  if (!src) { box.innerHTML = `<div class="muted">Für diesen Spieler gibt es in diesem Markt keine Prognose.</div>`; return; }
+  const line = calc.market === "moneyline" ? null : parse(calc.line);
+  if (calc.market !== "moneyline" && line == null) { box.innerHTML = `<div class="muted">Linie eingeben.</div>`; return; }
+  const pr = M.marketProbability(src.d, calc.market, calc.sel, line);
+  const fair = 1 / pr.p;
+  const price = parse(calc.price), opp = parse(calc.opp);
+  const S = D.settings;
+  let html = `<div class="kpis">
+      <div class="kpi"><div class="k">Modell</div><div class="v num">${pct(pr.p)}</div><div class="s num">${pr.pAlt == null ? "" : `LGBM ${pct(pr.pPrimary, 0)} · XGB ${pct(pr.pAlt, 0)}`}</div></div>
+      <div class="kpi"><div class="k">Faire Quote</div><div class="v num">${dec(fair)}</div><div class="s">${pr.push > 0.0005 ? `Push ${pct(pr.push)}` : "ohne Marge"}</div></div>
+      <div class="kpi"><div class="k">Mindestquote</div><div class="v num">${pr.p - S.minEdge > 0.02 ? dec(1 / (pr.p - S.minEdge) / (1 - tax())) : "–"}</div><div class="s">für ${pct(S.minEdge, 0)} Edge</div></div>
+    </div>`;
+  if (src.d.mu != null && M.PLAYER.includes(calc.market)) html += distChart(src.d, line, calc.sel);
+  if (price == null || price <= 1) { box.innerHTML = html + `<div class="muted">Quote des Buchmachers eingeben, um Erwartungswert und Einsatz zu sehen.</div>`; return; }
+  const net = price * (1 - tax());
+  const ev = M.ev(pr.win, net, pr.push);
+  let pMarket = null, edge = null, margin = null;
+  if (opp != null && opp > 1) { pMarket = M.devig([price, opp])[0]; edge = pr.p - pMarket; margin = 1 / price + 1 / opp - 1; }
+  const st = M.stake({ pWin: pr.win, pPush: pr.push, pMarket, price: net, bankroll: bankroll(), cfg: { kelly: S.kelly, maxBet: S.maxBet, shrink: S.shrink } });
+  const reasons = [];
+  if (!src.on) reasons.push("Prognose deaktiviert (zu wenig oder veraltete Daten).");
+  if (started(g)) reasons.push("Spiel hat bereits begonnen.");
+  if (ev <= 0) reasons.push("Erwartungswert nicht positiv.");
+  if (edge != null && edge < S.minEdge) reasons.push(`Edge unter ${pct(S.minEdge, 0)}.`);
+  if (edge != null && edge > S.maxEdge) reasons.push("Edge unplausibel groß: Meist fehlt dem Modell eine Information (späte Verletzung, Aufstellung).");
+  if (net < S.minPrice || net > S.maxPrice) reasons.push(`Quote außerhalb ${dec(S.minPrice)}–${dec(S.maxPrice)}.`);
+  if (src.q < 0.6) reasons.push(`Datenqualität nur ${pct(src.q, 0)}.`);
+  (src.flags || []).filter((f) => f !== "injury_report_stale").forEach((f) => reasons.push("Hinweis: " + (FLAGS[f] ?? f) + "."));
+  const blocking = reasons.filter((r) => !r.startsWith("Hinweis"));
+  const tone = blocking.length ? (ev > 0 ? "warn" : "bad") : "good";
+  const word = blocking.length ? (ev > 0 ? "Grenzfall" : "Kein Value") : "Value";
+  html += `<div class="verdict ${tone}"><span class="dot ${tone}"></span><b>${word}</b><span class="num">EV ${spct(ev)}${edge == null ? "" : ` · Edge ${spct(edge)}`}</span></div>
+    <div class="kpis">
+      <div class="kpi"><div class="k">EV</div><div class="v num">${spct(ev)}</div><div class="s num">pro 1 € Einsatz${tax() > 0 ? `, netto ${dec(net)}` : ""}</div></div>
+      <div class="kpi"><div class="k">Markt fair</div><div class="v num">${pct(pMarket)}</div><div class="s num">${margin == null ? "Gegenquote fehlt" : `Marge ${pct(margin)}`}</div></div>
+      <div class="kpi"><div class="k">Einsatz</div><div class="v num">${ev > 0 && !blocking.some((r) => r.startsWith("Prognose") || r.startsWith("Spiel")) ? eur(st.amount) : "–"}</div><div class="s num">¼ Kelly${st.capped ? `, Limit ${pct(S.maxBet, 0)}` : ""}</div></div>
+    </div>`;
+  if (reasons.length) html += `<ul class="reasons">${reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`;
+  if (edge == null) html += `<div class="muted">Ohne Gegenquote wird der Einsatz nur aus dem Modell berechnet (ohne Abgleich mit dem Markt) und fällt dadurch größer aus.</div>`;
+  box.innerHTML = html;
+}
+
+function distChart(d, line, sel) {
+  const hi = Math.max(M.nbQuantile(0.995, d.mu, d.alpha), Math.ceil(line ?? 0) + 2);
+  const ks = Array.from({ length: hi + 1 }, (_, k) => k), ps = ks.map((k) => M.nbPmf(k, d.mu, d.alpha));
+  const W = 340, H = 110, top = 6, bottom = 92, bw = W / ks.length, max = Math.max(...ps);
+  const win = (k) => line == null ? true : sel === "over" ? k > line : k < line;
+  const bars = ks.map((k, i) => `<rect x="${(i * bw + 0.6).toFixed(2)}" y="${(bottom - (ps[i] / max) * (bottom - top)).toFixed(2)}" width="${Math.max(0.8, bw - 1.2).toFixed(2)}" height="${((ps[i] / max) * (bottom - top)).toFixed(2)}" rx="1.5" fill="var(--accent)" opacity="${win(k) ? 1 : 0.28}"/>`).join("");
+  const step = Math.max(1, Math.ceil(ks.length / 8));
+  const labels = ks.filter((k) => k % step === 0).map((k) => `<text x="${(k + 0.5) * bw}" y="106" text-anchor="middle">${k}</text>`).join("");
+  const lx = line == null ? null : (line + 0.5) * bw;
+  return `<div class="dist"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Wahrscheinlichkeitsverteilung, Erwartung ${dec(d.mu, 1)}">${bars}${labels}${
+    lx == null ? "" : `<line x1="${lx}" x2="${lx}" y1="${top}" y2="${bottom}" stroke="var(--ink-2)" stroke-dasharray="3 3"/>`}</svg>
+    <div class="muted num">Erwartung ${dec(d.mu, 1)} · 80 % zwischen ${M.nbQuantile(0.1, d.mu, d.alpha)} und ${M.nbQuantile(0.9, d.mu, d.alpha)} · gedämpfte Balken: Wette verliert</div></div>`;
+}
+
+load();
+</script>
