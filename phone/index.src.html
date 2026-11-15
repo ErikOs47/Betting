@@ -128,7 +128,7 @@ footer { color: var(--ink-3); font-size: 0.78rem; display: grid; gap: 6px; }
       <label>Bankroll (€)<input id="bankroll" inputmode="decimal" autocomplete="off"></label>
       <label>Wettsteuer auf Gewinn (%)<input id="tax" inputmode="decimal" autocomplete="off"></label>
     </div>
-    <p class="muted">Die Daten werden täglich um ca. 7:50 und 16:50 Uhr aktualisiert. Für ein zusätzliches Update schreib Claude in der Claude-Code-Sitzung dieses Projekts „NBA-Update jetzt“. Einsatzvorschläge: ¼ Kelly, höchstens <span id="maxBetTxt">1 %</span> der Bankroll pro Wette.</p>
+    <p class="muted">Die Daten werden täglich um ca. 7:50 und 16:50 Uhr aktualisiert. Für ein zusätzliches Update: die geplante Aufgabe „NBA Update“ in Claude Code jetzt ausführen lassen, oder Claude Code bitten: „Führe die Aufgabe NBA Update jetzt aus.“ Ein Lauf dauert etwa 5 Minuten. Einsatzvorschläge: ¼ Kelly, höchstens <span id="maxBetTxt">1 %</span> der Bankroll pro Wette.</p>
   </section>
 
   <div id="notices"></div>
@@ -193,7 +193,7 @@ function renderStatus() {
   ];
   $("#status").innerHTML = chips.join("");
   const n = [];
-  if (age >= 13) n.push(`<div class="notice">Die Daten sind ${Math.round(age)} Stunden alt. Verletzungen und Aufstellungen können sich seitdem geändert haben. Für ein Update Claude in der Claude-Code-Sitzung dieses Projekts „NBA-Update jetzt“ schreiben.</div>`);
+  if (age >= 13) n.push(`<div class="notice">Die Daten sind ${Math.round(age)} Stunden alt. Verletzungen und Aufstellungen können sich seitdem geändert haben. Für ein Update die Aufgabe „NBA Update“ in Claude Code jetzt ausführen lassen.</div>`);
   if (D.data.staleResults) n.push(`<div class="notice bad">Für ${D.data.staleResults} vergangene Spiele fehlen Ergebnisse. Die Prognosen sind deshalb deaktiviert.</div>`);
   $("#notices").innerHTML = n.join("");
   const bt = D.backtest?.period;
