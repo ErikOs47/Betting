@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Badge, Button, Card, Notice, PageTitle, Scroll, State, Stat } from "@/components/ui";
+import { Badge, Button, Card, DesktopOnly, MobileList, Notice, PageTitle, Scroll, State, Stat } from "@/components/ui";
 import { api, money, pct, spct, useSlip } from "@/lib/api";
 
 export default function Builder() {
@@ -40,7 +40,23 @@ export default function Builder() {
             {slip.legs.length === 0 ? (
               <div className="py-8 text-center text-sm text-ink-3">Noch keine Auswahl. Füge Wetten im <Link className="text-s1 underline" href="/value">Value Finder</Link> oder über „Quote prüfen“ in der <Link className="text-s1 underline" href="/games">Spielanalyse</Link> hinzu.</div>
             ) : (
-              <Scroll>
+              <>
+              <MobileList>
+                {slip.legs.map((l, i) => {
+                  const r = res?.legs?.[i];
+                  return (
+                    <div key={i} className="flex items-center gap-2 px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm">{r?.description ?? l.label}</div>
+                        <div className="num text-xs text-ink-3">Modell {pct(r?.model_prob)}{r && !r.enabled ? " · Prognose deaktiviert" : ""}</div>
+                      </div>
+                      <input className="num w-20" inputMode="decimal" aria-label="Quote" value={l.price ?? ""} onChange={(e) => slip.update(i, { price: e.target.value ? Number(e.target.value.replace(",", ".")) : null })} />
+                      <Button onClick={() => slip.remove(i)} title="Entfernen">✕</Button>
+                    </div>
+                  );
+                })}
+              </MobileList>
+              <DesktopOnly><Scroll>
                 <table>
                   <thead><tr><th>Auswahl</th><th>Quote</th><th>Modell</th><th>Simulation</th><th></th></tr></thead>
                   <tbody>
@@ -57,7 +73,8 @@ export default function Builder() {
                     })}
                   </tbody>
                 </table>
-              </Scroll>
+              </Scroll></DesktopOnly>
+              </>
             )}
           </State>
           {slip.legs.length > 1 && (

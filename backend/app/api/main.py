@@ -33,6 +33,9 @@ app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origins.spl
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    if get_settings().scheduler == "internal":
+        from app.tasks import scheduler
+        scheduler.start()
 
 
 def require_token(authorization: str | None = Header(default=None)) -> None:
@@ -490,7 +493,9 @@ def start_job(name: str, bg: BackgroundTasks) -> dict:
 
 @app.get("/api/jobs")
 def job_state() -> dict:
-    return {"jobs": _job_state, "available": sorted(jobs.JOBS)}
+    from app.tasks import scheduler
+    return {"jobs": _job_state, "available": sorted(jobs.JOBS),
+            "scheduler": {"mode": get_settings().scheduler, **scheduler.state} if get_settings().scheduler == "internal" else {"mode": get_settings().scheduler}}
 
 
 @app.get("/api/overview")

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { LineChart, SERIES } from "@/components/charts";
-import { Badge, Button, Card, Notice, PageTitle, Scroll, Stat, State } from "@/components/ui";
+import { Badge, Button, Card, DesktopOnly, MobileList, Notice, PageTitle, Scroll, Stat, State } from "@/components/ui";
 import { MARKET, api, money, pct, spct, time, useApi } from "@/lib/api";
 
 const ST: Record<string, ["good" | "bad" | "info" | "warn", string]> = {
@@ -49,7 +49,15 @@ export default function Performance() {
       <div className="mt-5">
         <Card title="Wetten">
           <State loading={bets.loading} error={bets.error} empty={bets.data?.bets.length === 0 && "Noch keine Paper-Wetten platziert."}>
-            <Scroll>
+            <MobileList>
+              {bets.data?.bets.map((b: any) => (
+                <div key={b.id} className="px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-2"><div className="min-w-0 text-sm">{b.description}</div><Badge tone={ST[b.status][0]}>{ST[b.status][1]}</Badge></div>
+                  <div className="num mt-1 text-xs text-ink-2">{time(b.placed_at)} · {money(b.stake)} @ {b.price.toFixed(2)} · EV {spct(b.ev)}{b.pnl != null ? ` · G/V ${money(b.pnl)}` : ""}{b.clv != null ? ` · CLV ${spct(b.clv)}` : ""}</div>
+                </div>
+              ))}
+            </MobileList>
+            <DesktopOnly><Scroll>
               <table>
                 <thead><tr><th>#</th><th>Platziert</th><th>Wette</th><th>Einsatz</th><th>Quote</th><th>Modell</th><th>EV</th><th>Status</th><th>G/V</th><th>CLV</th></tr></thead>
                 <tbody>
@@ -62,7 +70,7 @@ export default function Performance() {
                   ))}
                 </tbody>
               </table>
-            </Scroll>
+            </Scroll></DesktopOnly>
           </State>
         </Card>
       </div>

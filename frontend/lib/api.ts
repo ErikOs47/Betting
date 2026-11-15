@@ -10,6 +10,9 @@ export async function api<T = any>(path: string, init?: { method?: string; body?
     body: init?.body === undefined ? undefined : JSON.stringify(init.body),
     cache: "no-store",
   });
+  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;  // session expired
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail ?? res.statusText));
   return data as T;

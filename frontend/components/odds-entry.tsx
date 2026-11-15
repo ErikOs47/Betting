@@ -30,22 +30,22 @@ export function OddsEntry({ gameId, game, players, onSaved }: { gameId: string; 
       stored.reload(); onSaved?.();
     } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
   };
-  const cell = "w-20";
+  const cell = "min-w-0 flex-1 sm:w-20 sm:flex-none";
   return (
     <Card title="Buchmacherquoten erfassen (z. B. Tipico)" right={<Button kind="primary" onClick={save}>Quoten speichern</Button>}>
       <p className="mb-3 text-xs text-ink-3">Quoten aus der Buchmacher-App abtippen. Sie werden mit Zeitstempel gespeichert und im Value Finder wie API-Quoten ausgewertet; ein späteres erneutes Erfassen liefert die Schlussquote für den CLV. Immer beide Seiten eintragen, sonst kann die Marge nicht entfernt werden.</p>
       <div className="space-y-3 text-sm">
         <label className="flex items-center gap-2">Buchmacher<input className="w-32" value={book} onChange={(e) => setBook(e.target.value)} aria-label="Buchmacher" /></label>
         <div className="grid gap-2">
-          <div className="flex flex-wrap items-center gap-2"><span className="w-28 text-ink-2">Moneyline</span><span className="w-20" />
+          <div className="flex flex-wrap items-center gap-2"><span className="w-full text-ink-2 sm:w-28">Moneyline</span><span className="hidden w-20 sm:block" />
             <input className={cell} inputMode="decimal" placeholder={game.home} aria-label="Moneyline Heim" value={ml.a} onChange={(e) => setMl({ ...ml, a: e.target.value })} />
             <input className={cell} inputMode="decimal" placeholder={game.away} aria-label="Moneyline Auswärts" value={ml.b} onChange={(e) => setMl({ ...ml, b: e.target.value })} /></div>
-          <div className="flex flex-wrap items-center gap-2"><span className="w-28 text-ink-2">Handicap</span>
+          <div className="flex flex-wrap items-center gap-2"><span className="w-full text-ink-2 sm:w-28">Handicap</span>
             <input className={cell} inputMode="decimal" placeholder={`${game.home} -5.5`} aria-label="Handicap Heim Linie" value={sp.line} onChange={(e) => setSp({ ...sp, line: e.target.value })} />
             <input className={cell} inputMode="decimal" placeholder={game.home} aria-label="Handicap Heim Quote" value={sp.a} onChange={(e) => setSp({ ...sp, a: e.target.value })} />
             <input className={cell} inputMode="decimal" placeholder={game.away} aria-label="Handicap Auswärts Quote" value={sp.b} onChange={(e) => setSp({ ...sp, b: e.target.value })} />
-            <span className="text-xs text-ink-3">Linie aus Sicht des Heimteams</span></div>
-          <div className="flex flex-wrap items-center gap-2"><span className="w-28 text-ink-2">Over/Under</span>
+            <span className="w-full text-xs text-ink-3 sm:w-auto">Linie aus Sicht des Heimteams</span></div>
+          <div className="flex flex-wrap items-center gap-2"><span className="w-full text-ink-2 sm:w-28">Over/Under</span>
             <input className={cell} inputMode="decimal" placeholder="228.5" aria-label="Total Linie" value={to.line} onChange={(e) => setTo({ ...to, line: e.target.value })} />
             <input className={cell} inputMode="decimal" placeholder="Over" aria-label="Total Over" value={to.a} onChange={(e) => setTo({ ...to, a: e.target.value })} />
             <input className={cell} inputMode="decimal" placeholder="Under" aria-label="Total Under" value={to.b} onChange={(e) => setTo({ ...to, b: e.target.value })} /></div>

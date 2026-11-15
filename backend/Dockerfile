@@ -1,6 +1,6 @@
-FROM python:3.12-slim
+# full (non-slim) image: already contains libgomp, which LightGBM needs - no apt step required
+FROM python:3.12
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/backend
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

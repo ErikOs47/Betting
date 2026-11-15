@@ -1,17 +1,7 @@
-# NBA Betting Intelligence - full stack.   docker compose up --build
-x-backend: &backend
-  build: { context: ., dockerfile: backend/Dockerfile }
-  env_file: .env
-  environment:
-    NBI_DATABASE_URL: postgresql+psycopg://nbi:${POSTGRES_PASSWORD:-nbi}@db:5432/nbi
-    NBI_REDIS_URL: redis://redis:6379/0
-    NBI_DATA_DIR: /app/data
-  volumes: [nbi-data:/app/data]
-  depends_on:
-    db: { condition: service_healthy }
-    redis: { condition: service_healthy }
-  restart: unless-stopped
-
+# NBA Betting Intelligence
+#   Local / home network:  docker compose up -d --build                 -> http://<this-computer>:3000
+#   Internet server+HTTPS: docker compose --profile https up -d --build -> https://$DOMAIN
+# On first start the API downloads three seasons of data by itself (~4 h, rate-limited), then trains the models.
 services:
   db:
     image: postgres:16-alpine
@@ -20,27 +10,39 @@ services:
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U nbi"], interval: 5s, timeout: 3s, retries: 10 }
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 10 }
-    restart: unless-stopped
-
   api:
-    <<: *backend
-    ports: ["127.0.0.1:8000:8000"]
-    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"], interval: 15s, timeout: 5s, retries: 5 }
-
-  worker:   # Celery worker + beat: results, injuries, odds, predictions, settlement, weekly backtest
-    <<: *backend
-    command: celery -A app.tasks.celery_app worker -B --loglevel=info --schedule /tmp/celerybeat-schedule
+    build: { context: ., dockerfile: backend/Dockerfile }
+    image: nbi-api
+    env_file: .env
+    environment:
+      NBI_DATABASE_URL: postgresql+psycopg://nbi:${POSTGRES_PASSWORD:-nbi}@db:5432/nbi
+      NBI_DATA_DIR: /app/data
+      NBI_SCHEDULER: internal          # results, injuries, odds, predictions, settlement run inside this container
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --workers 1
+    volumes: [nbi-data:/app/data]
+    depends_on: { db: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"], interval: 30s, timeout: 5s, retries: 5 }
+    restart: unless-stopped
 
   web:
     build: { context: frontend }
+    image: nbi-web
     environment:
       BACKEND_URL: http://api:8000
+      NBI_APP_PASSWORD: ${NBI_APP_PASSWORD:-}     # login for the web app (strongly recommended)
+      NBI_SESSION_SECRET: ${NBI_SESSION_SECRET:-}
       NBI_API_TOKEN: ${NBI_API_TOKEN:-}
-    ports: ["127.0.0.1:3000:3000"]
+    ports: ["${WEB_PORT:-3000}:3000"]
     depends_on: [api]
     restart: unless-stopped
 
-volumes: { pg-data: {}, nbi-data: {} }
+  caddy:   # automatic HTTPS (Let's Encrypt) - needed to install the app on a phone home screen
+    profiles: [https]
+    image: caddy:2-alpine
+    command: caddy reverse-proxy --from ${DOMAIN:-set-DOMAIN-in-.env} --to web:3000
+    ports: ["80:80", "443:443"]
+    volumes: [caddy-data:/data]
+    depends_on: [web]
+    restart: unless-stopped
+
+volumes: { pg-data: {}, nbi-data: {}, caddy-data: {} }

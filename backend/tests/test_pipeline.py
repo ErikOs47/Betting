@@ -183,3 +183,21 @@ def test_manual_tipico_quotes_drive_value_finder_and_tax(trained):
     db.query(OddsSnapshot).update({"fetched_at": utcnow() - timedelta(hours=4)})
     db.commit()
     assert all("odds stale" in x["fail_reasons"] for x in c.get("/api/value-bets", params={"all": True}).json()["candidates"])
+
+
+def test_internal_scheduler_bootstrap_detection(db, monkeypatch):
+    from app.tasks import scheduler
+    monkeypatch.setattr(scheduler, "MIN_FINAL_GAMES", 200)
+    assert scheduler.needs_bootstrap()  # empty database -> download seasons first
+    populate(db, n_days=70)
+    db.commit()
+    train_and_register(db)
+    db.commit()
+    assert scheduler.needs_bootstrap()  # only one season stored -> still bootstrapping
+    from app.db import Game
+    for g in db.query(Game).filter(Game.date < date(2024, 11, 15)):
+        g.season = 2023
+    for g in db.query(Game).filter(Game.date >= date(2024, 11, 15), Game.date < date(2024, 12, 10)):
+        g.season = 2024
+    db.commit()
+    assert not scheduler.needs_bootstrap()

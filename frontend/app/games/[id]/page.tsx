@@ -3,7 +3,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 import { DistChart } from "@/components/charts";
 import { OddsEntry } from "@/components/odds-entry";
-import { Badge, Button, Card, Notice, PageTitle, Scroll, State } from "@/components/ui";
+import { Badge, Button, Card, DesktopOnly, MobileList, Notice, PageTitle, Scroll, State } from "@/components/ui";
 import { FLAG, MARKET, SEL, api, money, pct, spct, time, useApi, useSlip } from "@/lib/api";
 
 const PM = ["points", "rebounds", "assists", "threes", "pra"] as const;
@@ -97,12 +97,12 @@ export default function GameDetail({ params }: { params: Promise<{ id: string }>
         <div className="space-y-5">
           <PageTitle title={`${g.away_name} @ ${g.home_name}`} sub={<>{time(g.tip_utc)} · {g.status === "final" ? `Endstand ${g.away_pts}:${g.home_pts}` : "noch nicht gespielt"} · <Link className="text-s1 underline" href="/games">zurück</Link></>} />
           {g.model && (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
               {[["Heimsieg-Wahrscheinlichkeit", pct(g.model.home_win_prob), `faire Quote ${g.model.fair_home.toFixed(2)} / ${g.model.fair_away.toFixed(2)}`],
                 ["Erwartete Margin (Heim)", `${g.model.margin > 0 ? "+" : ""}${g.model.margin}`, `Standardabw. ${g.model.sigma_margin.toFixed(1)}`],
                 ["Erwartete Gesamtpunkte", g.model.total, `Standardabw. ${g.model.sigma_total.toFixed(1)}`],
                 ["Datenqualität", pct(g.model.data_quality, 0), g.model.enabled ? "Prognose aktiv" : "Prognose deaktiviert"]].map(([k, v, s]) => (
-                <div key={k as string} className="rounded-xl border border-line bg-surface p-4"><div className="text-xs uppercase tracking-wide text-ink-3">{k}</div><div className="num mt-1 text-2xl font-semibold">{v}</div><div className="mt-1 text-xs text-ink-3">{s}</div></div>
+                <div key={k as string} className="min-w-0 rounded-xl border border-line bg-surface p-3 sm:p-4"><div className="text-[0.68rem] uppercase tracking-wide text-ink-3 sm:text-xs">{k}</div><div className="num mt-1 text-xl font-semibold sm:text-2xl">{v}</div><div className="mt-1 text-xs text-ink-3">{s}</div></div>
               ))}
             </div>
           )}
@@ -127,7 +127,20 @@ export default function GameDetail({ params }: { params: Promise<{ id: string }>
           {data.players.length > 0 && <Evaluator gameId={id} players={data.players} game={g} />}
           {data.players.length > 0 && (
             <Card title="Spielerprognosen (Erwartungswert · 10–90 %-Bereich)">
-              <Scroll>
+              <MobileList>
+                {data.players.map((p: any) => (
+                  <div key={p.player_id} className={`px-3 py-2.5 ${p.enabled ? "" : "opacity-55"}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 truncate font-medium">{p.name} <span className="font-normal text-ink-3">{p.team} · {p.min_l10?.toFixed(0) ?? "–"} Min</span></div>
+                      <Badge tone={p.enabled ? "good" : "warn"}>{pct(p.data_quality, 0)}</Badge>
+                    </div>
+                    <div className="mt-1 grid grid-cols-5 gap-1 text-center text-xs">
+                      {PM.map((m) => <div key={m}><div className="text-ink-3">{m === "points" ? "PTS" : m === "rebounds" ? "REB" : m === "assists" ? "AST" : m === "threes" ? "3P" : "PRA"}</div><div className="num text-sm text-ink">{p.proj[m]?.mean.toFixed(1) ?? "–"}</div><div className="num text-[0.65rem] text-ink-3">{p.proj[m] ? `${p.proj[m].p10}–${p.proj[m].p90}` : ""}</div></div>)}
+                    </div>
+                  </div>
+                ))}
+              </MobileList>
+              <DesktopOnly><Scroll>
                 <table>
                   <thead><tr><th>Spieler</th><th>Team</th><th>Min Ø10</th><th>Usage Ø10</th>{PM.map((m) => <th key={m}>{MARKET[m]}</th>)}<th>Qualität</th></tr></thead>
                   <tbody>
@@ -141,7 +154,7 @@ export default function GameDetail({ params }: { params: Promise<{ id: string }>
                     ))}
                   </tbody>
                 </table>
-              </Scroll>
+              </Scroll></DesktopOnly>
             </Card>
           )}
           {data.box.length > 0 && (

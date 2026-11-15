@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     stale_games_s: int = 36 * 3600
 
     cors_origins: str = "http://localhost:3000"
+    scheduler: str = "off"  # "internal": run refresh jobs inside the API process (single-container deployments)
     api_token: str = ""  # optional bearer token protecting mutating endpoints
 
     @property

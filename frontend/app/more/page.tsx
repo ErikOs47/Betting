@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { SRC, STATE, TONE } from "@/components/shell";
 import { Badge, Card, PageTitle } from "@/components/ui";
 import { age, money, spct, useApi } from "@/lib/api";
@@ -12,6 +13,8 @@ const LINKS = [
 
 export default function More() {
   const st = useApi<any>("status", 30000);
+  const [login, setLogin] = useState(false);
+  useEffect(() => { fetch("/auth/login").then((r) => r.json()).then((d) => setLogin(Boolean(d.enabled))).catch(() => {}); }, []);
   const perf = useApi<any>("performance");
   return (
     <>
@@ -41,7 +44,7 @@ export default function More() {
             ))}
           </div>
         </Card>
-        <a href="/auth/logout" className="block rounded-xl border border-line bg-surface px-4 py-3 text-center text-sm text-ink-2">Abmelden</a>
+        {login && <a href="/auth/logout" className="block rounded-xl border border-line bg-surface px-4 py-3 text-center text-sm text-ink-2">Abmelden</a>}
         <p className="px-1 text-xs text-ink-3">Paper Betting – es werden keine Echtgeldwetten platziert. Glücksspiel kann süchtig machen: BZgA 0800 1 37 27 00.</p>
       </div>
     </>

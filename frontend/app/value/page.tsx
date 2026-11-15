@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Meter } from "@/components/charts";
-import { Badge, Button, Card, Notice, PageTitle, Scroll, State } from "@/components/ui";
+import { Badge, Button, Card, DesktopOnly, MobileList, Notice, PageTitle, Scroll, State } from "@/components/ui";
 import { FLAG, MARKET, SEL, api, money, pct, spct, time, useApi, useSlip } from "@/lib/api";
 
 const FAIL: Record<string, string> = {
@@ -39,7 +39,7 @@ export default function ValueFinder() {
     <>
       <PageTitle title="Value Finder" sub="Vergleich der Modellwahrscheinlichkeit mit margenbereinigten Buchmacherquoten. EV = Modellwahrscheinlichkeit × Quote − 1; Edge = Modell − marktfaire Wahrscheinlichkeit (Konsens aller Buchmacher)." />
       {msg && <div className="mb-4"><Notice tone={msg.tone}>{msg.text}</Notice></div>}
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <label className="flex items-center gap-2">Markt
           <select value={market} onChange={(e) => setMarket(e.target.value)}>
             <option value="">alle</option>{Object.keys(MARKET).filter((m) => m !== "parlay").map((m) => <option key={m} value={m}>{MARKET[m]}</option>)}
@@ -49,11 +49,38 @@ export default function ValueFinder() {
           <select value={sort} onChange={(e) => setSort(e.target.value as any)}><option value="ev">EV</option><option value="edge">Edge</option><option value="confidence">Confidence</option></select>
         </label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> auch abgelehnte Kandidaten zeigen</label>
-        {f && <span className="text-xs text-ink-3">Filter: Edge ≥ {pct(f.min_edge, 0)} · Confidence ≥ {f.min_confidence} · EV &gt; {pct(f.min_ev, 0)} · Datenqualität ≥ {pct(f.min_data_quality, 0)}</span>}
+        {f && <span className="hidden text-xs text-ink-3 sm:inline">Filter: Edge ≥ {pct(f.min_edge, 0)} · Confidence ≥ {f.min_confidence} · EV &gt; {pct(f.min_ev, 0)} · Datenqualität ≥ {pct(f.min_data_quality, 0)}</span>}
       </div>
       <Card title={`${data?.count_passing ?? 0} Value Bets erfüllen alle Filter`}>
         <State loading={loading} error={error} empty={rows.length === 0 && "Keine Kandidaten. Erfasse Buchmacherquoten (z. B. Tipico) in der Spielanalyse eines Spiels – sie erscheinen dann hier. Unten stehen die fairen Linien des Modells mit Mindestquoten."}>
-          <Scroll>
+          <MobileList>
+            {rows.map((c: any, i: number) => (
+              <div key={i} className={`px-3 py-3 ${c.passes ? "" : "opacity-60"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{c.player_name ?? MARKET[c.market]}</div>
+                    <div className="truncate text-xs text-ink-2">{c.player_name ? `${MARKET[c.market]} ` : ""}{SEL[c.selection]} {c.line ?? ""} · {c.matchup} · {time(c.tip_utc)}</div>
+                  </div>
+                  <div className="num shrink-0 text-right"><div className="font-semibold">{c.price.toFixed(2)}</div><div className="text-xs text-ink-3">{c.bookmaker}</div></div>
+                </div>
+                <div className="mt-2 grid grid-cols-4 gap-2 text-xs">
+                  <div><div className="text-ink-3">Modell</div><div className="num">{pct(c.model_prob)}</div></div>
+                  <div><div className="text-ink-3">Edge</div><div className="num">{spct(c.edge)}</div></div>
+                  <div><div className="text-ink-3">EV</div><div className="num">{spct(c.ev)}</div></div>
+                  <div><div className="text-ink-3">Conf.</div><div className="num">{c.confidence}</div></div>
+                </div>
+                {!c.passes && <div className="mt-1.5 flex flex-wrap gap-1">{c.fail_reasons.map((r: string) => <Badge key={r} tone="warn">{FAIL[r] ?? r}</Badge>)}</div>}
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="num text-xs text-ink-2">Einsatz {c.stake.blocked ? "–" : money(c.stake.amount)} · fair {c.fair_odds.toFixed(2)}</span>
+                  <div className="flex gap-1.5">
+                    <Button onClick={() => slip.add({ ...leg(c), label: `${c.player_name ?? c.matchup} ${MARKET[c.market]} ${SEL[c.selection]} ${c.line ?? ""}` })}>+ Kombi</Button>
+                    <Button kind="primary" disabled={!c.passes || c.stake.blocked || data.kill_switch} onClick={() => place(c)}>Wetten</Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </MobileList>
+          <DesktopOnly><Scroll>
             <table>
               <thead><tr><th>Partie</th><th>Wette</th><th>Beste Quote</th><th>Faire Quote</th><th>Modell</th><th>Markt (fair)</th><th>Edge</th><th>EV</th><th>Confidence</th><th>Einsatz (¼ Kelly)</th><th></th></tr></thead>
               <tbody>
@@ -100,18 +127,35 @@ export default function ValueFinder() {
                 ))}
               </tbody>
             </table>
-          </Scroll>
+          </Scroll></DesktopOnly>
         </State>
       </Card>
       <div className="mt-5">
-        <Card title="Faire Linien des Modells (ohne Quoten nutzbar)" right={<div className="flex gap-2">
+        <Card title="Faire Linien des Modells" right={<div className="flex gap-2">
           <select value={fairGame} onChange={(e) => setFg(e.target.value)} aria-label="Partie faire Linien">{fairGames.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select>
           <select value={fm} onChange={(e) => setFm(e.target.value)} aria-label="Markt faire Linien">
             {Object.keys(MARKET).filter((m) => m !== "parlay").map((m) => <option key={m} value={m}>{MARKET[m]}</option>)}
           </select></div>}>
-          <p className="mb-3 text-xs text-ink-3">Vergleiche diese Werte mit der Quote deines Buchmachers. „Mindestquote“ ist die Quote, ab der der Edge-Filter ({pct(fair.data?.min_edge, 0)}) sicher erfüllt ist{fair.data?.payout_tax > 0 ? `, inklusive ${pct(fair.data.payout_tax, 1)} Wettsteuer` : ""} – gültig nur für genau die angegebene Linie. Bietet der Buchmacher eine andere Linie, nutze „Quote prüfen“ in der Spielanalyse.</p>
+          <p className="mb-3 text-xs text-ink-3"><b className="text-ink-2">Ohne Quoten-Feed nutzbar.</b> Vergleiche diese Werte mit der Quote deines Buchmachers. „Mindestquote“ ist die Quote, ab der der Edge-Filter ({pct(fair.data?.min_edge, 0)}) sicher erfüllt ist{fair.data?.payout_tax > 0 ? `, inklusive ${pct(fair.data.payout_tax, 1)} Wettsteuer` : ""} – gültig nur für genau die angegebene Linie. Bietet der Buchmacher eine andere Linie, nutze „Quote prüfen“ in der Spielanalyse.</p>
           <State loading={fair.loading} error={fair.error} empty={fairRows.length === 0 && "Keine aktiven Prognosen für anstehende Spiele in diesem Markt."}>
-            <Scroll>
+            <MobileList>
+              {fairRows.map((l: any, i: number) => {
+                const two = fm === "moneyline" || fm === "spread";
+                return (
+                  <div key={i} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{l.player_name ?? MARKET[l.market]} {l.team && <span className="font-normal text-ink-3">{l.team}</span>}</div>
+                      <div className="num text-xs text-ink-2">{l.line == null ? `Erwartete Margin ${l.mean > 0 ? "+" : ""}${l.mean}` : fm === "spread" ? `Heim ${l.line > 0 ? "+" : ""}${l.line}` : `Linie ${l.line} · Ø ${l.mean}`} · {two ? "Heim" : "Over"} {pct(l.p_a, 0)}</div>
+                    </div>
+                    <div className="num shrink-0 text-right text-xs">
+                      <div><span className="text-ink-3">{two ? "H" : "O"} ab </span><b className="text-sm text-ink">{l.min_a?.toFixed(2) ?? "–"}</b></div>
+                      <div><span className="text-ink-3">{two ? "A" : "U"} ab </span><b className="text-sm text-ink">{l.min_b?.toFixed(2) ?? "–"}</b></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </MobileList>
+            <DesktopOnly><Scroll>
               <table>
                 <thead><tr><th>Partie</th><th>{fm === "moneyline" || fm === "spread" || fm === "total" ? "Markt" : "Spieler"}</th><th>Erwartung</th><th>Linie</th><th>Wahrsch. {fm === "moneyline" || fm === "spread" ? "Heim" : "Over"}</th><th>Faire Quote {fm === "moneyline" || fm === "spread" ? "Heim / Auswärts" : "Over / Under"}</th><th>Mindestquote {fm === "moneyline" || fm === "spread" ? "Heim / Auswärts" : "Over / Under"}</th><th>Datenqualität</th></tr></thead>
                 <tbody>
@@ -129,7 +173,7 @@ export default function ValueFinder() {
                   ))}
                 </tbody>
               </table>
-            </Scroll>
+            </Scroll></DesktopOnly>
           </State>
         </Card>
       </div>
