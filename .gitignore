@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+!data/.gitkeep
+.env
+node_modules/
+.next/
+frontend/test-results/
+frontend/playwright-report/
+*.log
+.pytest_cache/
