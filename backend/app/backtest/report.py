@@ -59,11 +59,9 @@ INTERPRETATION = """
 - **Spieler-Props:** Beide Modelle sind in jedem Markt genauer als die naiven Baselines (Ø letzte 10 Spiele, Saison-Ø),
   und die Prognoseintervalle treffen ihre Sollabdeckung (50/80/90 %) nahezu exakt – die Verteilungen sind also brauchbar
   kalibriert. Der Vorsprung im MAE ist klein (wenige Prozent); das ist bei Zählstatistiken mit hoher Zufallsstreuung normal.
-- **Spielmärkte:** Das Boosting-Modell ist **nicht besser als eine einfache Elo-Wertung**. Die Unterschiede zu Elo liegen
-  im Bereich des Stichprobenrauschens. Für Moneyline/Handicap gibt es damit keinen Beleg für einen Modellvorteil; das
-  schlägt sich in einer niedrigen Kalibrierungs-Komponente der Confidence nieder, sodass diese Märkte den
-  Standardfilter (Confidence >= 70) seltener passieren. Nur bei Gesamtpunkten ist das Modell klar besser als die
-  einfache Pace-x-Effizienz-Schätzung.
+- **Spielmärkte:** Das Boosting-Modell liegt bei Moneyline und Handicap **praktisch gleichauf mit einer einfachen
+  Elo-Wertung** (siehe Tabelle; die Abstände liegen im Bereich des Stichprobenrauschens). Ein belastbarer Modellvorteil
+  ist dort nicht belegt. Nur bei Gesamtpunkten ist das Modell klar besser als die einfache Pace-x-Effizienz-Schätzung.
 - **Wichtig:** Diese Zahlen messen Prognosegüte gegen echte Ergebnisse, **nicht** Profitabilität gegen Buchmacher.
   Buchmacherlinien enthalten mehr Information als jede hier verwendete Baseline. Ob ein Vorteil gegenüber dem Markt
   besteht, lässt sich erst mit historischen Quoten bzw. über den CLV gesammelter Paper-Wetten beurteilen.
