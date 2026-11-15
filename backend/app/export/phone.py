@@ -63,7 +63,12 @@ def build(db: Session, days: int = 2) -> dict:
                                                    "q": round(p.data_quality, 2), "on": p.enabled, "flags": p.quality_flags, "d": {}})
             row["d"][p.market] = _dist(p.dist)
             if p.market == "points":
-                row["min"] = round((p.features or {}).get("p_min_l10") or 0, 1)
+                f = p.features or {}
+                row["min"] = round(f.get("p_min_l10") or 0, 1)
+                # average of the last 10 games per market: bookmaker lines usually sit close to it
+                row["l10"] = {m: (None if f.get(k) is None else round(f[k], 1)) for m, k in
+                              (("points", "p_pts_l10"), ("rebounds", "p_trb_l10"), ("assists", "p_ast_l10"),
+                               ("threes", "p_fg3_l10"), ("pra", "p_pra_l10"))}
         plist = sorted((r for r in players.values() if r.get("min", 0) >= MIN_PLAYER_MINUTES), key=lambda r: -r["min"])
         out_games.append({
             "id": g.id, "tip": _iso(g.tip_utc), "home": g.home_id, "away": g.away_id,

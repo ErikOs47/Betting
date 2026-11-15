@@ -84,6 +84,17 @@ select, input { width: 100%; min-width: 0; background: var(--surface-2); border:
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
 .seg button { border: none; background: none; border-radius: 6px; padding: 7px 4px; color: var(--ink-2); }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
+#nav a { text-align: center; text-decoration: none; border-radius: 6px; padding: 7px 4px; color: var(--ink-2); }
+#nav a[aria-current="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
+.back { text-decoration: none; }
+.tips { display: grid; gap: 8px; }
+.tip { display: flex; align-items: stretch; gap: 6px; width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; text-align: left; }
+.tipmain { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; flex: 1; min-width: 0; background: none; border: none; text-align: left; }
+.tip.tipmain { background: var(--surface-2); border: 1px solid var(--line); }
+.tipname { font-weight: 600; }
+.tipright { text-align: right; flex: none; }
+.tipdel { background: none; border: none; border-left: 1px solid var(--line); padding: 0 12px; color: var(--ink-3); }
+.verdictchip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; }
 .result { display: grid; gap: 10px; }
 .verdict { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 10px 12px; border: 1px solid var(--line); background: var(--surface-2); }
 .verdict.good { border-color: var(--good); } .verdict.bad { border-color: var(--bad); } .verdict.warn { border-color: var(--warn); }
@@ -119,6 +130,7 @@ footer { color: var(--ink-3); font-size: 0.78rem; display: grid; gap: 6px; }
       </div>
       <button class="tab" id="settingsBtn" aria-expanded="false" aria-controls="settings">Einstellungen</button>
     </div>
+    <nav class="seg" id="nav" aria-label="Ansicht"><a href="#" data-view="tips">Tipps</a><a href="#spiele" data-view="list">Spiele</a></nav>
     <div class="chips" id="status"><span class="chip"><span class="dot"></span>Lade Daten …</span></div>
   </header>
 
@@ -214,7 +226,9 @@ function route() {
   if (!D) return;
   const m = location.hash.match(/^#spiel-([0-9]{9}[A-Z]{3})$/);
   const g = m && D.games.find((x) => x.id === m[1]);
-  if (g) renderGame(g); else renderList();
+  const view = g ? "game" : location.hash === "#spiele" ? "list" : "tips";
+  document.querySelectorAll("#nav a").forEach((a) => a.setAttribute("aria-current", String(a.dataset.view === (view === "game" ? "list" : view))));
+  if (g) renderGame(g); else if (view === "list") renderList(); else renderTips();
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", route);
@@ -258,15 +272,16 @@ function defaultLine(g) {
 }
 
 function renderGame(g) {
-  if (!g.model) { $("#view").innerHTML = `<a class="back" href="#">← Alle Spiele</a><div class="card">Für dieses Spiel gibt es keine Prognose.</div>`; return; }
+  if (!g.model) { $("#view").innerHTML = `<a class="back" href="#spiele">← Alle Spiele</a><div class="card">Für dieses Spiel gibt es keine Prognose.</div>`; return; }
   if (calc.game !== g.id) Object.assign(calc, { game: g.id, market: "moneyline", sel: "home", player: g.players[0]?.id ?? null, line: "", price: "", opp: "" });
+  if (!calc.player) calc.player = g.players[0]?.id ?? null;
   const p = homeProb(g), m = g.model;
   const inj = (side) => (g.injuries[side].length ? g.injuries[side].map((i) => `<div class="row between"><span>${esc(i.name)}<span class="muted"> · ${esc(i.reason)}</span></span><span class="st ${esc(i.status)}">${esc(i.status)}</span></div>`).join("") : `<div class="muted">keine Meldungen</div>`);
   const rows = g.players.map((pl) => `<tr class="${pl.on ? "" : "dim"}"><td class="player"><button data-player="${pl.id}">${esc(pl.name)}</button><div class="muted">${pl.team} · ${dec(pl.min, 0)} Min${pl.flags.filter((f) => f !== "injury_report_stale").map((f) => " · " + (FLAGS[f] ?? f)).join("")}</div></td>${
     M.PLAYER.map((k) => `<td class="num">${pl.d[k] ? dec(pl.d[k].mu, 1) : "–"}</td>`).join("")}</tr>`).join("");
   $("#view").innerHTML = `
     <div style="display:grid;gap:12px">
-      <a class="back" href="#">← Alle Spiele</a>
+      <a class="back" href="#spiele">← Alle Spiele</a>
       <div><h2>${esc(g.awayName)} @ ${esc(g.homeName)}</h2><div class="muted">${fmtWhen(g.tip)} Uhr · Datenqualität ${pct(m.q, 0)}${m.on ? "" : " · Prognose deaktiviert"}</div></div>
       ${started(g) ? `<div class="notice">Das Spiel hat bereits begonnen. Die Prognose gilt nur vor dem Spiel; Live-Quoten sind damit nicht vergleichbar.</div>` : ""}
       <div class="kpis">
@@ -323,56 +338,159 @@ function syncForm(g) {
   compute(g);
 }
 
-function distFor(g) {
-  if (calc.market === "moneyline" || calc.market === "spread") return { d: g.model.margin, on: g.model.on, q: g.model.q, flags: g.model.flags };
-  if (calc.market === "total") return { d: g.model.total, on: g.model.on, q: g.model.q, flags: g.model.flags };
-  const p = g.players.find((x) => x.id === calc.player);
-  return p && p.d[calc.market] ? { d: p.d[calc.market], on: p.on, q: p.q, flags: p.flags, name: p.name } : null;
+function distFor(g, c) {
+  if (c.market === "moneyline" || c.market === "spread") return { d: g.model.margin, on: g.model.on, q: g.model.q, flags: g.model.flags };
+  if (c.market === "total") return { d: g.model.total, on: g.model.on, q: g.model.q, flags: g.model.flags };
+  const p = g.players.find((x) => x.id === c.player);
+  return p && p.d[c.market] ? { d: p.d[c.market], on: p.on, q: p.q, flags: p.flags, name: p.name } : null;
 }
 
-function compute(g) {
-  const box = $("#cResult");
-  const src = distFor(g);
-  if (!src) { box.innerHTML = `<div class="muted">Für diesen Spieler gibt es in diesem Markt keine Prognose.</div>`; return; }
-  const line = calc.market === "moneyline" ? null : parse(calc.line);
-  if (calc.market !== "moneyline" && line == null) { box.innerHTML = `<div class="muted">Linie eingeben.</div>`; return; }
-  const pr = M.marketProbability(src.d, calc.market, calc.sel, line);
-  const fair = 1 / pr.p;
-  const price = parse(calc.price), opp = parse(calc.opp);
-  const S = D.settings;
-  let html = `<div class="kpis">
-      <div class="kpi"><div class="k">Modell</div><div class="v num">${pct(pr.p)}</div><div class="s num">${pr.pAlt == null ? "" : `LGBM ${pct(pr.pPrimary, 0)} · XGB ${pct(pr.pAlt, 0)}`}</div></div>
-      <div class="kpi"><div class="k">Faire Quote</div><div class="v num">${dec(fair)}</div><div class="s">${pr.push > 0.0005 ? `Push ${pct(pr.push)}` : "ohne Marge"}</div></div>
-      <div class="kpi"><div class="k">Mindestquote</div><div class="v num">${pr.p - S.minEdge > 0.02 ? dec(1 / (pr.p - S.minEdge) / (1 - tax())) : "–"}</div><div class="s">für ${pct(S.minEdge, 0)} Edge</div></div>
-    </div>`;
-  if (src.d.mu != null && M.PLAYER.includes(calc.market)) html += distChart(src.d, line, calc.sel);
-  if (price == null || price <= 1) { box.innerHTML = html + `<div class="muted">Quote des Buchmachers eingeben, um Erwartungswert und Einsatz zu sehen.</div>`; return; }
-  const net = price * (1 - tax());
-  const ev = M.ev(pr.win, net, pr.push);
+/** Full assessment of one selection c = {market, sel, player, line, price, opp} for game g. */
+function assess(g, c) {
+  const src = distFor(g, c);
+  if (!src) return null;
+  const line = c.market === "moneyline" ? null : c.line;
+  if (c.market !== "moneyline" && line == null) return { src, needLine: true };
+  const S = D.settings, pr = M.marketProbability(src.d, c.market, c.sel, line);
+  const out = { src, pr, line, fair: 1 / pr.p, minPrice: pr.p - S.minEdge > 0.02 ? 1 / (pr.p - S.minEdge) / (1 - tax()) : null };
+  if (c.price == null || c.price <= 1) return out;
+  const net = c.price * (1 - tax()), ev = M.ev(pr.win, net, pr.push);
   let pMarket = null, edge = null, margin = null;
-  if (opp != null && opp > 1) { pMarket = M.devig([price, opp])[0]; edge = pr.p - pMarket; margin = 1 / price + 1 / opp - 1; }
+  if (c.opp != null && c.opp > 1) { pMarket = M.devig([c.price, c.opp])[0]; edge = pr.p - pMarket; margin = 1 / c.price + 1 / c.opp - 1; }
   const st = M.stake({ pWin: pr.win, pPush: pr.push, pMarket, price: net, bankroll: bankroll(), cfg: { kelly: S.kelly, maxBet: S.maxBet, shrink: S.shrink } });
   const reasons = [];
   if (!src.on) reasons.push("Prognose deaktiviert (zu wenig oder veraltete Daten).");
   if (started(g)) reasons.push("Spiel hat bereits begonnen.");
   if (ev <= 0) reasons.push("Erwartungswert nicht positiv.");
   if (edge != null && edge < S.minEdge) reasons.push(`Edge unter ${pct(S.minEdge, 0)}.`);
-  if (edge != null && edge > S.maxEdge) reasons.push("Edge unplausibel groß: Meist fehlt dem Modell eine Information (späte Verletzung, Aufstellung).");
+  if (edge == null && out.minPrice != null && c.price < out.minPrice) reasons.push(`Quote unter der Mindestquote ${dec(out.minPrice)}.`);
+  if ((edge != null && edge > S.maxEdge) || (edge == null && ev > 0.35)) reasons.push("Vorteil unplausibel groß: Meist fehlt dem Modell eine Information (späte Verletzung, Aufstellung).");
   if (net < S.minPrice || net > S.maxPrice) reasons.push(`Quote außerhalb ${dec(S.minPrice)}–${dec(S.maxPrice)}.`);
   if (src.q < 0.6) reasons.push(`Datenqualität nur ${pct(src.q, 0)}.`);
   (src.flags || []).filter((f) => f !== "injury_report_stale").forEach((f) => reasons.push("Hinweis: " + (FLAGS[f] ?? f) + "."));
   const blocking = reasons.filter((r) => !r.startsWith("Hinweis"));
   const tone = blocking.length ? (ev > 0 ? "warn" : "bad") : "good";
-  const word = blocking.length ? (ev > 0 ? "Grenzfall" : "Kein Value") : "Value";
-  html += `<div class="verdict ${tone}"><span class="dot ${tone}"></span><b>${word}</b><span class="num">EV ${spct(ev)}${edge == null ? "" : ` · Edge ${spct(edge)}`}</span></div>
-    <div class="kpis">
-      <div class="kpi"><div class="k">EV</div><div class="v num">${spct(ev)}</div><div class="s num">pro 1 € Einsatz${tax() > 0 ? `, netto ${dec(net)}` : ""}</div></div>
-      <div class="kpi"><div class="k">Markt fair</div><div class="v num">${pct(pMarket)}</div><div class="s num">${margin == null ? "Gegenquote fehlt" : `Marge ${pct(margin)}`}</div></div>
-      <div class="kpi"><div class="k">Einsatz</div><div class="v num">${ev > 0 && !blocking.some((r) => r.startsWith("Prognose") || r.startsWith("Spiel")) ? eur(st.amount) : "–"}</div><div class="s num">¼ Kelly${st.capped ? `, Limit ${pct(S.maxBet, 0)}` : ""}</div></div>
+  const noStake = blocking.some((r) => r.startsWith("Prognose") || r.startsWith("Spiel"));
+  return Object.assign(out, { net, ev, pMarket, edge, margin, st, reasons, blocking, tone, noStake,
+    word: blocking.length ? (ev > 0 ? "Grenzfall" : "Kein Value") : "Value" });
+}
+
+function selLabel(g, c) {
+  const who = M.PLAYER.includes(c.market) ? (g.players.find((x) => x.id === c.player)?.name ?? "") + " · " : "";
+  const side = c.sel === "home" ? g.home : c.sel === "away" ? g.away : c.sel === "over" ? "Over" : "Under";
+  const ln = c.market === "moneyline" ? "" : c.market === "spread" ? ` ${c.line > 0 ? "+" : ""}${dec(c.line, 1)}` : ` ${dec(c.line, 1)}`;
+  return `${who}${MARKETS[c.market]} ${side}${ln}`;
+}
+
+function compute(g) {
+  const box = $("#cResult");
+  const c = { market: calc.market, sel: calc.sel, player: calc.player, line: parse(calc.line), price: parse(calc.price), opp: parse(calc.opp) };
+  const a = assess(g, c);
+  if (!a) { box.innerHTML = `<div class="muted">Für diesen Spieler gibt es in diesem Markt keine Prognose.</div>`; return; }
+  if (a.needLine) { box.innerHTML = `<div class="muted">Linie eingeben.</div>`; return; }
+  const pr = a.pr, S = D.settings;
+  let html = `<div class="kpis">
+      <div class="kpi"><div class="k">Modell</div><div class="v num">${pct(pr.p)}</div><div class="s num">${pr.pAlt == null ? "" : `LGBM ${pct(pr.pPrimary, 0)} · XGB ${pct(pr.pAlt, 0)}`}</div></div>
+      <div class="kpi"><div class="k">Faire Quote</div><div class="v num">${dec(a.fair)}</div><div class="s">${pr.push > 0.0005 ? `Push ${pct(pr.push)}` : "ohne Marge"}</div></div>
+      <div class="kpi"><div class="k">Mindestquote</div><div class="v num">${a.minPrice ? dec(a.minPrice) : "–"}</div><div class="s">für ${pct(S.minEdge, 0)} Edge</div></div>
     </div>`;
-  if (reasons.length) html += `<ul class="reasons">${reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`;
-  if (edge == null) html += `<div class="muted">Ohne Gegenquote wird der Einsatz nur aus dem Modell berechnet (ohne Abgleich mit dem Markt) und fällt dadurch größer aus.</div>`;
+  if (M.PLAYER.includes(c.market)) html += distChart(a.src.d, a.line, c.sel);
+  if (a.ev == null) { box.innerHTML = html + `<div class="muted">Quote des Buchmachers eingeben, um Erwartungswert und Einsatz zu sehen.</div>`; return; }
+  html += `<div class="verdict ${a.tone}"><span class="dot ${a.tone}"></span><b>${a.word}</b><span class="num">EV ${spct(a.ev)}${a.edge == null ? "" : ` · Edge ${spct(a.edge)}`}</span></div>
+    <div class="kpis">
+      <div class="kpi"><div class="k">EV</div><div class="v num">${spct(a.ev)}</div><div class="s num">pro 1 € Einsatz${tax() > 0 ? `, netto ${dec(a.net)}` : ""}</div></div>
+      <div class="kpi"><div class="k">Markt fair</div><div class="v num">${pct(a.pMarket)}</div><div class="s num">${a.margin == null ? "Gegenquote fehlt" : `Marge ${pct(a.margin)}`}</div></div>
+      <div class="kpi"><div class="k">Einsatz</div><div class="v num">${a.ev > 0 && !a.noStake ? eur(a.st.amount) : "–"}</div><div class="s num">¼ Kelly${a.st.capped ? `, Limit ${pct(S.maxBet, 0)}` : ""}</div></div>
+    </div>`;
+  if (a.reasons.length) html += `<ul class="reasons">${a.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`;
+  if (a.edge == null) html += `<div class="muted">Ohne Gegenquote wird der Einsatz nur aus dem Modell berechnet (ohne Abgleich mit dem Markt) und fällt dadurch größer aus.</div>`;
+  html += `<button type="button" class="tab" id="cSave">Quote merken (erscheint unter Tipps)</button>`;
   box.innerHTML = html;
+  $("#cSave").addEventListener("click", () => {
+    const list = savedQuotes().filter((q) => !(q.game === g.id && q.market === c.market && q.sel === c.sel && q.player === c.player && q.line === c.line));
+    list.push({ game: g.id, ...c, ts: Date.now() });
+    store.set("nbi-quotes", JSON.stringify(list));
+    $("#cSave").textContent = "Gemerkt ✓";
+  });
+}
+
+function savedQuotes() {
+  try { const l = JSON.parse(store.get("nbi-quotes", "[]")); return Array.isArray(l) ? l.filter((q) => D.games.some((g) => g.id === q.game)) : []; } catch { return []; }
+}
+
+/** Props where the model deviates most from the player's last-10 average (where bookmaker lines usually sit). */
+function candidates(dayIso) {
+  const S = D.settings, out = [];
+  for (const g of D.games) {
+    if (gameDay(g) !== dayIso || started(g) || !g.model) continue;
+    for (const pl of g.players) {
+      if (!pl.on || pl.q < 0.7 || (pl.min ?? 0) < 20 || !pl.l10) continue;
+      if ((pl.flags || []).some((f) => ["returning_from_absence", "new_team", "questionable", "few_games"].includes(f))) continue;
+      for (const m of M.PLAYER) {
+        const d = pl.d[m], avg = pl.l10[m];
+        if (!d || avg == null) continue;
+        const line = Math.floor(avg) + 0.5;
+        if (m === "threes" && line < 1.5) continue;
+        const over = M.marketProbability(d, m, "over", line).p;
+        const sel = over >= 0.5 ? "over" : "under", p = Math.max(over, 1 - over);
+        if (p < 0.57 || p > 0.70) continue;  // above 70 %: the average is no longer a plausible line
+        out.push({ g, pl, market: m, sel, line, p, avg, mu: d.mu, fair: 1 / p, minPrice: 1 / (p - S.minEdge) / (1 - tax()) });
+      }
+    }
+  }
+  // one entry per player (PRA overlaps with its parts): keep the strongest
+  const best = new Map();
+  for (const c of out.sort((a, b) => b.p - a.p)) if (!best.has(c.pl.id)) best.set(c.pl.id, c);
+  return [...best.values()].slice(0, 20);
+}
+
+function openCalc(gid, c) {
+  Object.assign(calc, { game: gid, market: c.market, sel: c.sel, player: c.player ?? calc.player, line: c.line == null ? "" : String(c.line).replace(".", ","),
+    price: c.price ? String(c.price).replace(".", ",") : "", opp: c.opp ? String(c.opp).replace(".", ",") : "" });
+  if (location.hash === "#spiel-" + gid) route(); else location.hash = "#spiel-" + gid;
+}
+
+function renderTips() {
+  const days = [...new Set(D.games.map(gameDay))].sort();
+  const dayTabs = days.map((d) => `<button class="tab" data-day="${d}" aria-pressed="${d === day}">${esc(dayLabel(d))}</button>`).join("");
+  const saved = savedQuotes().map((q) => { const g = D.games.find((x) => x.id === q.game); return { q, g, a: assess(g, q) }; })
+    .filter((x) => x.a && x.a.ev != null).sort((x, y) => (y.a.tone === "good") - (x.a.tone === "good") || y.a.ev - x.a.ev);
+  const savedHtml = saved.length ? saved.map(({ q, g, a }, i) => `<div class="tip">
+      <button type="button" class="tipmain" data-saved="${i}">
+        <div><div class="tipname">${esc(selLabel(g, q))}</div><div class="muted">${g.away} @ ${g.home} · ${fmtTime(g.tip)} Uhr · Quote ${dec(q.price)}</div></div>
+        <div class="tipright"><span class="verdictchip ${a.tone}"><span class="dot ${a.tone}"></span>${a.word}</span><div class="num">EV ${spct(a.ev)}</div><div class="muted num">${a.ev > 0 && !a.noStake ? "Einsatz " + eur(a.st.amount) : ""}</div></div>
+      </button><button type="button" class="tipdel" data-del="${i}" aria-label="Entfernen">✕</button></div>`).join("")
+    : `<div class="muted">Noch keine Quoten gemerkt. Tippe unten einen Kandidaten an, trage die Quote deines Buchmachers ein und wähle „Quote merken“.</div>`;
+  const cand = candidates(day);
+  const candHtml = cand.length ? cand.map((c, i) => `<button type="button" class="tip tipmain" data-cand="${i}">
+      <div><div class="tipname">${esc(c.pl.name)} <span class="muted">${c.pl.team}</span></div>
+        <div class="num">${MARKETS[c.market]} <b>${c.sel === "over" ? "Over" : "Under"} ${dec(c.line, 1)}</b></div>
+        <div class="muted num">Modell ${dec(c.mu, 1)} · Schnitt letzte 10: ${dec(c.avg, 1)} · ${c.g.away} @ ${c.g.home} ${fmtTime(c.g.tip)}</div></div>
+      <div class="tipright"><div class="num"><b>${pct(c.p, 0)}</b></div><div class="muted">lohnt ab</div><div class="num"><b>${dec(c.minPrice)}</b></div></div>
+    </button>`).join("") : `<div class="muted">Für diesen Tag gibt es keine klaren Kandidaten (oder die Spiele haben begonnen).</div>`;
+  const ml = D.games.filter((g) => gameDay(g) === day && !started(g) && g.model && g.model.on).map((g) => {
+    const p = homeProb(g), fav = p >= 0.5, pf = fav ? p : 1 - p;
+    return `<button type="button" class="tip tipmain" data-ml="${g.id}" data-sel="${fav ? "home" : "away"}">
+      <div><div class="tipname">${fav ? g.home : g.away} gewinnt</div><div class="muted">${g.away} @ ${g.home} · ${fmtTime(g.tip)} Uhr</div></div>
+      <div class="tipright"><div class="num"><b>${pct(pf, 0)}</b></div><div class="muted">lohnt ab</div><div class="num"><b>${pf - D.settings.minEdge > 0.02 ? dec(1 / (pf - D.settings.minEdge) / (1 - tax())) : "–"}</b></div></div></button>`;
+  }).join("");
+  $("#view").innerHTML = `<div style="display:grid;gap:12px">
+    <div class="tabs" role="group" aria-label="Spieltag">${dayTabs}</div>
+    <section class="card"><h3>Deine gemerkten Quoten</h3><div class="tips">${savedHtml}</div></section>
+    <section class="card"><h3>Kandidaten: Spieler-Wetten</h3>
+      <p class="muted" style="margin:0">Hier weicht das Modell am deutlichsten vom Schnitt der letzten 10 Spiele ab, an dem sich Buchmacher-Linien meist orientieren. Das ist noch keine Empfehlung: Eine Wette lohnt nur, wenn dein Buchmacher <b>diese Linie</b> mindestens zur Quote „lohnt ab“ anbietet. Bei anderer Linie antippen und im Rechner prüfen.</p>
+      <div class="tips">${candHtml}</div></section>
+    <section class="card"><h3>Sieger-Wetten</h3>
+      <p class="muted" style="margin:0">Bei Sieger-Wetten ist das Modell im Test nicht besser als eine einfache Stärke-Rangliste. Mit Vorsicht nutzen.</p>
+      <div class="tips">${ml || `<div class="muted">Keine offenen Spiele.</div>`}</div></section></div>`;
+  document.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { day = b.dataset.day; store.set("nbi-day", day); renderTips(); }));
+  document.querySelectorAll("[data-cand]").forEach((b) => b.addEventListener("click", () => { const c = cand[+b.dataset.cand]; openCalc(c.g.id, { market: c.market, sel: c.sel, player: c.pl.id, line: c.line }); }));
+  document.querySelectorAll("[data-saved]").forEach((b) => b.addEventListener("click", () => { const { q, g } = saved[+b.dataset.saved]; openCalc(g.id, q); }));
+  document.querySelectorAll("[data-ml]").forEach((b) => b.addEventListener("click", () => openCalc(b.dataset.ml, { market: "moneyline", sel: b.dataset.sel, line: null })));
+  document.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
+    const x = saved[+b.dataset.del].q;
+    store.set("nbi-quotes", JSON.stringify(savedQuotes().filter((q) => q.ts !== x.ts))); renderTips();
+  }));
 }
 
 function distChart(d, line, sel) {
