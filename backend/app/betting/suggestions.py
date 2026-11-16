@@ -18,7 +18,7 @@ from scipy import optimize
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.betting import doubles
+from app.betting import doubles, periods
 from app.betting.probability import PLAYER_MARKETS, market_probability
 from app.db import Game, Player, PlayerGameStat, Prediction, Setting, Suggestion, utcnow
 
@@ -187,16 +187,106 @@ def generate(db: Session) -> list[dict]:
             per_day[key] = per_day.get(key, 0) + 1
             kept.append(c)
     out = kept
-    # game winners: the model's favourite of every open game (tracked for information, no learning)
-    for g in {g.id: g for _, g in rows}.values():
-        m = next((pr for pr, gg in rows if gg.id == g.id and pr.market == "margin" and pr.enabled), None)
-        if m is None:
-            continue
-        ph = market_probability(m.dist, "moneyline", "home", None)["p"]
-        sel, p = ("home", ph) if ph >= 0.5 else ("away", 1 - ph)
-        out.append({"game_id": g.id, "player_id": None, "team_id": g.home_id if sel == "home" else g.away_id, "market": "moneyline",
-                    "selection": sel, "line": None, "raw_prob": round(p, 4), "prob": round(p, 4), "mu": round(m.dist["mu"], 2), "l10": None})
+    # team bets: the same picks the phone page lists under "Team" (tracked for information, no learning)
+    P = periods.load(db)
+    games = {g.id: g for _, g in rows}
+    for g in games.values():
+        mp = next((pr for pr, gg in rows if gg.id == g.id and pr.market == "margin" and pr.enabled), None)
+        tp = next((pr for pr, gg in rows if gg.id == g.id and pr.market == "total" and pr.enabled), None)
+        if mp is not None and tp is not None:
+            out += team_candidates(g, mp.dist, tp.dist, P)
     return sorted(out, key=lambda c: -c["prob"])
+
+
+def _jsround(x: float) -> int:
+    return math.floor(x + 0.5)  # same as Math.round on the phone
+
+
+def _ens(d: dict) -> float:
+    return (d["mu"] + d["alt"]["mu"]) / 2 if d.get("alt") else d["mu"]
+
+
+def team_candidates(g: Game, md: dict, td: dict, P: dict | None) -> list[dict]:
+    """Mirror of the team section of the phone page (renderTips in phone/index.src.html)."""
+    def c(market, sel, line, p, team=None):
+        return {"game_id": g.id, "player_id": None, "team_id": team, "market": market, "selection": sel, "line": line,
+                "raw_prob": round(p, 4), "prob": round(p, 4), "mu": None, "l10": None}
+    side = lambda s: g.home_id if s == "home" else g.away_id if s == "away" else None
+    out = []
+    mu_m, mu_t = _ens(md), _ens(td)
+    ph = market_probability(md, "moneyline", "home", None)["p"]
+    fav = "home" if ph >= 0.5 else "away"
+    out.append(c("moneyline", fav, None, max(ph, 1 - ph), side(fav)))
+    line_fav = -max(0.5, math.floor(abs(mu_m)) - 0.5)
+    out.append(c("spread", fav, line_fav, market_probability(md, "spread", fav, line_fav)["p"], side(fav)))
+    lt = _jsround(mu_t) + 0.5
+    po = market_probability(td, "total", "over", lt)["p"]
+    out.append(c("total", "over" if po >= 0.5 else "under", lt, max(po, 1 - po)))
+    if not P:
+        return out
+    pr = lambda key, sel, line=None: periods.derived_prob(P, key, sel, line, mu_m, mu_t)
+    for s in ("away", "home"):
+        key = f"team_{s}:fg"
+        ln = _jsround(periods.derived_mean(P, key, mu_m, mu_t)) + 0.5
+        po = pr(key, "over", ln)
+        out.append(c(key, "over" if po >= 0.5 else "under", ln, max(po, 1 - po), side(s)))
+    out.append(c("win:h1", fav, None, pr("win:h1", fav), side(fav)))
+    hl = _jsround(periods.derived_mean(P, "total:h1", mu_m, mu_t)) + 0.5
+    ho = pr("total:h1", "over", hl)
+    out.append(c("total:h1", "over" if ho >= 0.5 else "under", hl, max(ho, 1 - ho)))
+    qs = [pr(f"win:q{i}", fav) for i in range(1, 5)]
+    best = int(np.argmax(qs))
+    out.append(c(f"win:q{best + 1}", fav, None, qs[best], side(fav)))
+    combos = sorted(((x, pr("htft", x)) for x in ("hh", "dh", "ah", "ha", "da", "aa")), key=lambda t: -t[1])
+    out.append(c("htft", combos[0][0], None, combos[0][1]))
+    return out
+
+
+TEAM_CATS = {"moneyline": "ml", "spread": "spread", "total": "total", "team_home:fg": "teams", "team_away:fg": "teams",
+             "win:h1": "h1", "total:h1": "h1", "htft": "htft", **{f"win:q{i}": "q" for i in range(1, 5)}}
+
+
+TEAM_CAT_ORDER = ("ml", "spread", "total", "teams", "h1", "q", "htft")
+
+
+def settle_team(s: Suggestion, g: Game) -> None:
+    """Outcome of a team suggestion; void when the needed result is missing or the bet would be a push."""
+    margin, total = g.home_pts - g.away_pts, g.home_pts + g.away_pts
+    pv = periods.period_values(g.line_score or {})
+    m = s.market
+    if m == "moneyline":
+        s.actual, won = float(margin), (margin > 0) == (s.selection == "home")
+    elif m == "spread":
+        own = margin if s.selection == "home" else -margin
+        s.actual = float(own)
+        if own + s.line == 0:
+            s.status = "void"; return
+        won = own + s.line > 0
+    elif m == "total":
+        s.actual, won = float(total), (total > s.line) == (s.selection == "over")
+    elif m.startswith("team_"):
+        pts = g.home_pts if m.startswith("team_home") else g.away_pts
+        s.actual, won = float(pts), (pts > s.line) == (s.selection == "over")
+    else:
+        if pv is None:
+            s.status = "void"; return
+        if m.startswith("win:"):
+            h, a = pv[m[4:]]
+            s.actual = float(h - a)
+            res = "home" if h > a else "away" if a > h else "draw"
+            won = res == s.selection
+        elif m == "total:h1":
+            h, a = pv["h1"]
+            s.actual, won = float(h + a), (h + a > s.line) == (s.selection == "over")
+        elif m == "htft":
+            h, a = pv["h1"]
+            ht = "h" if h > a else "a" if a > h else "d"
+            ft = "h" if margin > 0 else "a"
+            s.actual = float(margin)
+            won = ht + ft == s.selection
+        else:
+            s.status = "void"; return
+    s.status = "won" if won else "lost"
 
 
 def record(db: Session) -> dict:
@@ -208,9 +298,9 @@ def record(db: Session) -> dict:
         db.execute(delete(Suggestion).where(Suggestion.status == "open", Suggestion.game_id.in_(open_games)))
     cands = generate(db)
     for c in cands:
-        db.add(Suggestion(kind="moneyline" if c["market"] == "moneyline" else "prop", **c))
+        db.add(Suggestion(kind="prop" if c["player_id"] else "team", **c))
     db.flush()
-    return {"recorded": len(cands), "props": sum(c["market"] != "moneyline" for c in cands)}
+    return {"recorded": len(cands), "props": sum(bool(c["player_id"]) for c in cands)}
 
 
 def settle(db: Session) -> dict:
@@ -224,9 +314,8 @@ def settle(db: Session) -> dict:
             if g.tip_utc and g.tip_utc < utcnow() - timedelta(days=3):
                 s.status = "void"  # postponed or never played
             continue
-        if s.kind == "moneyline":
-            s.actual = float(g.home_pts - g.away_pts)
-            s.status = "won" if (s.actual > 0) == (s.selection == "home") else "lost"
+        if s.kind in ("team", "moneyline"):
+            settle_team(s, g)
         else:
             st = db.get(PlayerGameStat, (s.game_id, s.player_id))
             if st is None or not st.played or st.seconds <= 0:
@@ -253,20 +342,41 @@ def _summary(rows: list[Suggestion]) -> dict:
 
 def stats(db: Session) -> dict:
     rows = list(db.scalars(select(Suggestion).where(Suggestion.status != "open").order_by(Suggestion.settled_at.desc())))
+    games = {g.id: g for g in db.scalars(select(Game).where(Game.id.in_({s.game_id for s in rows})))}
+    names = {p.id: p.name for p in db.scalars(select(Player).where(Player.id.in_({s.player_id for s in rows if s.player_id})))}
     props = [s for s in rows if s.kind == "prop" and s.market in SUGGEST_MARKETS]
-    decided = [s for s in props if s.status in ("won", "lost")][:40]
-    names = {p.id: p.name for p in db.scalars(select(Player).where(Player.id.in_({s.player_id for s in decided if s.player_id})))}
-    games = {g.id: g for g in db.scalars(select(Game).where(Game.id.in_({s.game_id for s in decided})))}
+    team = [s for s in rows if s.kind in ("team", "moneyline") and s.market in TEAM_CATS]
+    date_of = lambda s: games[s.game_id].date if s.game_id in games else None
+
+    def item(s: Suggestion) -> dict:
+        g = games.get(s.game_id)
+        return {"name": names.get(s.player_id, s.player_id) if s.player_id else None, "market": s.market, "sel": s.selection,
+                "line": s.line, "actual": s.actual, "status": s.status, "prob": s.prob, "date": str(g.date) if g else None,
+                "home": g.home_id if g else None, "away": g.away_id if g else None,
+                "score": f"{g.away_pts}:{g.home_pts}" if g and g.home_pts is not None else None}
+
+    def block(sel: list[Suggestion]) -> dict:
+        return {"props": _summary([s for s in sel if s in props_set]),
+                "by_market": {m: _summary([s for s in sel if s in props_set and s.market == m]) for m in SUGGEST_MARKETS},
+                "team": _summary([s for s in sel if s in team_set]),
+                "by_cat": {c: _summary([s for s in sel if s in team_set and TEAM_CATS[s.market] == c]) for c in TEAM_CAT_ORDER}}
+
+    props_set, team_set = set(props), set(team)
+    decided = [s for s in props + team if s.status in ("won", "lost")]
+    last_date = max((date_of(s) for s in decided if date_of(s)), default=None)
+    last = [s for s in decided if date_of(s) == last_date]
     prior = _prior(db)
     return {
-        "props": _summary(props),
-        "by_market": {m: _summary([s for s in props if s.market == m]) for m in SUGGEST_MARKETS},
+        **block(props + team),
         "markets": list(SUGGEST_MARKETS),
-        "moneyline": _summary([s for s in rows if s.kind == "moneyline"]),
+        "cats": list(TEAM_CAT_ORDER),
+        "since": str(min(date_of(s) for s in decided if date_of(s))) if decided else None,
+        "moneyline": _summary([s for s in team if s.market == "moneyline"]),
         "void": sum(s.status == "void" for s in rows),
-        "recent": [{"name": names.get(s.player_id, s.player_id), "market": s.market, "sel": s.selection, "line": s.line, "actual": s.actual,
-                    "status": s.status, "prob": s.prob, "date": str(games[s.game_id].date) if s.game_id in games else None}
-                   for s in decided],
+        "last": {"date": str(last_date) if last_date else None, **block(last),
+                 "items": [item(s) for s in sorted(last, key=lambda s: (s.player_id is None, -s.prob))]},
+        "recent": [item(s) for s in decided if s in props_set][:40],
+        "recent_team": [item(s) for s in decided if s in team_set][:40],
         "learning": learned_k(db),
         "backtest": {"period": prior.get("period"),
                      "markets": {m: {k: v.get(k) for k in ("n", "hits", "hit_rate", "expected", "k")} for m, v in prior.get("markets", {}).items()

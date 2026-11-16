@@ -84,6 +84,14 @@ console.log(JSON.stringify({{
     assert o["h1Total"][0] + o["h1Total"][1] == pytest.approx(1.0) and o["h1Total"][2] == pytest.approx(-4.4 + 0.52 * 226)
     assert o["team"][0] - o["team"][1] == pytest.approx(0.98 * 6) and o["team"][2] > o["team"][3]
     assert o["whole"]["push"] > 0 and o["whole"]["win"] + o["whole"]["lose"] + o["whole"]["push"] == pytest.approx(1.0)
+    # the backend's twin (used to record and settle team suggestions) gives the same numbers
+    from app.betting import periods
+    py = lambda k, s, l=None: periods.derived_prob(P, k, s, l, 6, 226)
+    assert [py("win:q1", s) for s in ("home", "draw", "away")] == pytest.approx(o["q1"], abs=1e-6)
+    assert [py("htft", s) for s in ("hh", "dh", "ah", "ha", "da", "aa")] == pytest.approx(o["htft"], abs=1e-6)
+    assert py("total:h1", "over", 113.5) == pytest.approx(o["h1Total"][0], abs=1e-6)
+    assert py("team_home:fg", "over", 115.5) == pytest.approx(o["team"][2], abs=1e-6)
+    assert periods.derived_mean(P, "team_away:fg", 6, 226) == pytest.approx(o["team"][1])
 
 
 def test_period_model_fit_and_line_score(db):

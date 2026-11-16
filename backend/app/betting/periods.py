@@ -93,3 +93,48 @@ def store(db: Session, model: dict) -> None:
 def load(db: Session) -> dict | None:
     row = db.get(Setting, KEY)
     return row.value if row is not None else None
+
+
+# ------------------------------------------------------------------ derived market probabilities
+# Python twin of derived()/derivedMean() in phone/nbmath.js (kept identical; see tests/test_phone_math.py).
+def derived_mean(P: dict, key: str, mu_m: float, mu_t: float) -> float | None:
+    kind, _, per = key.partition(":")
+    if kind == "win":
+        return P["periods"][per]["margin"]["b"] * mu_m
+    if kind == "total":
+        t = P["periods"][per]["total"]
+        return t["a"] + t["b"] * mu_t
+    if kind in ("team_home", "team_away"):
+        t = P["team"][per]
+        return t["a"] + t["b"] * (mu_t + (mu_m if kind == "team_home" else -mu_m)) / 2
+    return None
+
+
+def derived_prob(P: dict, key: str, sel: str, line: float | None, mu_m: float, mu_t: float) -> float:
+    """Probability that the selection wins, excluding pushes (win / (win + lose))."""
+    from scipy import stats
+    kind, _, per = key.partition(":")
+    if kind == "win":
+        m = P["periods"][per]["margin"]
+        mean = m["b"] * mu_m
+        home, away = stats.norm.sf(0.5, mean, m["sd"]), stats.norm.cdf(-0.5, mean, m["sd"])
+        return float({"home": home, "away": away, "draw": max(0.0, 1 - home - away)}[sel])
+    if kind in ("total", "team_home", "team_away"):
+        sd = P["periods"][per]["total"]["sd"] if kind == "total" else P["team"][per]["sd"]
+        over = stats.norm.sf(line, derived_mean(P, key, mu_m, mu_t), sd)  # lines are x.5: no push
+        return float(over if sel == "over" else 1 - over)
+    if kind == "htft":
+        h, f, rho = P["periods"]["h1"]["margin"], P["full"]["margin"], P["htft_rho"]
+        m1, s1, mf, sf = h["b"] * mu_m, h["sd"], f["b"] * mu_m, f["sd"]
+        sc = sf * np.sqrt(1 - rho * rho)
+        n = 1200
+        dx = 14 * s1 / n
+        x = m1 - 7 * s1 + (np.arange(n) + 0.5) * dx
+        z = (x - m1) / s1
+        w = np.exp(-0.5 * z * z) / (s1 * np.sqrt(2 * np.pi)) * dx
+        ft_home = 1 - stats.norm.cdf(0, mf + rho * sf * z, sc)
+        ht = np.where(x > 0.5, "h", np.where(x < -0.5, "a", "d"))
+        mask = ht == sel[0]
+        part = (w * (ft_home if sel[1] == "h" else 1 - ft_home))[mask].sum()
+        return float(part / w.sum())
+    raise ValueError(key)

@@ -87,6 +87,8 @@ header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; m
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 14px; min-width: 0; box-shadow: var(--shadow); }
 .list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow); }
 .list > * + * { border-top: 1px solid var(--line); }
+.card > *, .section > * { min-width: 0; }
+.inj .row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .empty { padding: 16px; color: var(--ink-3); font-size: 0.88rem; }
 details.hint { padding-inline: 4px; }
 details.hint summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 0.8rem; cursor: pointer; }
@@ -630,24 +632,54 @@ function candidates(dayIso) {
   return out.sort((a, b) => b.p - a.p);
 }
 
+const CAT_NAMES = { ml: "Sieger", spread: "Handicap", total: "Über/Unter", teams: "Team-Punkte", h1: "1. Halbzeit", q: "Viertel", htft: "Halbzeit/Endstand" };
+function teamLabel(r) {
+  const g = { home: r.home, away: r.away }, T = g[r.sel], ou = (x) => `${x === "over" ? "Over" : "Under"} ${dec(r.line, 1)}`;
+  if (r.market === "moneyline") return `${T} gewinnt`;
+  if (r.market === "spread") return `${T} ${String(r.line).replace(".", ",")}`;
+  if (r.market === "total") return `Gesamt ${ou(r.sel)}`;
+  if (r.market.startsWith("team_")) return `${g[r.market.startsWith("team_home") ? "home" : "away"]} ${ou(r.sel)}`;
+  if (r.market === "win:h1") return r.sel === "draw" ? "Unentschieden zur HZ" : `${T} führt zur HZ`;
+  if (r.market.startsWith("win:q")) return r.sel === "draw" ? `Unentschieden ${r.market[5]}. Viertel` : `${T} gewinnt ${r.market[5]}. Viertel`;
+  if (r.market === "total:h1") return `1. HZ ${ou(r.sel)}`;
+  if (r.market === "htft") return `HZ/Ende ${selName(g, r.sel)}`;
+  return r.market;
+}
+function resultRow(r) {
+  const player = r.name != null;
+  const label = player ? `${esc(r.name)} · ${MARKETS[r.market]} ${({ over: "Over", under: "Under", yes: "Ja", no: "Nein" })[r.sel]}${r.line == null ? "" : " " + dec(r.line, 1)}` : `${esc(teamLabel(r))} <span class="muted">${r.away} @ ${r.home}</span>`;
+  const right = player ? (YESNO.includes(r.market) ? "" : dec(r.actual, 0)) : (r.score ?? "");
+  return `<div class="row between"><span><b style="color:var(${r.status === "won" ? "--good" : "--bad"})">${r.status === "won" ? "✓" : "✗"}</b> ${label}</span><span class="num muted">${right}</span></div>`;
+}
 function trackCard() {
   const T = D.suggestions?.track;
   if (!T) return "";
-  const live = T.by_market.points, bt = T.backtest?.markets ?? {}, bp = bt.points;
-  const rows = (T.markets ?? Object.keys(T.by_market)).map((m) => { const l = T.by_market[m], b = bt[m];
-    return `<tr><td>${MARKETS[m]}</td><td>${l.n ? `${l.hits}/${l.n}` : "–"}</td><td>${pct(l.hit_rate, 0)}</td><td>${pct(l.expected, 0)}</td><td>${b ? `${pct(b.hit_rate, 0)} / ${pct(b.expected, 0)}` : "–"}</td></tr>`; }).join("");
-  const recent = T.recent.slice(0, 12).map((r) => `<div class="row between"><span>${r.status === "won" ? "✓" : "✗"} ${esc(r.name)} · ${MARKETS[r.market]} ${({ over: "Over", under: "Under", yes: "Ja", no: "Nein" })[r.sel]}${r.line == null ? "" : " " + dec(r.line, 1)}</span><span class="num muted">${YESNO.includes(r.market) ? "" : dec(r.actual, 0)}</span></div>`).join("");
-  return `<section class="card"><h3>Trefferquote der Tipps</h3>
-    <div class="kpis">
-      <div class="kpi"><div class="k">Punkte live</div><div class="v num">${live.n ? pct(live.hit_rate, 0) : "–"}</div><div class="s num">${live.n ? `${live.hits} von ${live.n}` : "noch keine"}</div></div>
-      <div class="kpi"><div class="k">Erwartet</div><div class="v num">${live.n ? pct(live.expected, 0) : "–"}</div><div class="s">laut Modell</div></div>
-      <div class="kpi"><div class="k">Im Test</div><div class="v num">${bp ? pct(bp.hit_rate, 0) : "–"}</div><div class="s num">${bp ? `Soll ${pct(bp.expected, 0)}` : ""}</div></div>
+  const bt = T.backtest?.markets ?? {};
+  const kpi = (k, x, sub) => `<div class="kpi"><div class="k">${k}</div><div class="v num">${x && x.n ? pct(x.hit_rate, 0) : "–"}</div><div class="s num">${x && x.n ? `${x.hits} von ${x.n} · Soll ${pct(x.expected, 0)}` : sub}</div></div>`;
+  const line = (name, l, extra = "") => `<tr><td>${name}</td><td>${l.n ? `${l.hits}/${l.n}` : "–"}</td><td>${pct(l.hit_rate, 0)}</td><td>${pct(l.expected, 0)}</td>${extra}</tr>`;
+  const L = T.last;
+  const lastHtml = L && L.date ? `<div class="section" style="gap:8px">
+      <div class="row between"><h3>Letzte Nacht</h3><span class="muted">${esc(dayShort(L.date))}</span></div>
+      <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">${kpi("Spieler", L.props, "keine")}${kpi("Team", L.team, "keine")}</div>
+      ${[["Spieler-Tipps", L.items.filter((r) => r.name != null)], ["Team-Tipps", L.items.filter((r) => r.name == null)]].filter(([, xs]) => xs.length).map(([t, xs]) =>
+        `<details class="more"><summary>${t} der Nacht (${xs.length})</summary><div class="inj" style="margin-top:10px">${xs.map(resultRow).join("")}</div></details>`).join("")}
+    </div>` : `<div class="muted">Noch keine abgerechneten Tipps.</div>`;
+  const pRows = (T.markets ?? []).map((m) => { const b = bt[m]; return line(MARKETS[m], T.by_market[m], `<td>${b ? `${pct(b.hit_rate, 0)} / ${pct(b.expected, 0)}` : "–"}</td>`); }).join("");
+  const tRows = (T.cats ?? []).map((c) => line(CAT_NAMES[c], T.by_cat[c], "<td>–</td>")).join("");
+  const head = (first) => `<thead><tr><th>${first}</th><th>Treffer</th><th>Quote</th><th>Soll</th><th>Test</th></tr></thead>`;
+  return `<section class="card">
+    ${lastHtml}
+    <div class="section" style="gap:8px">
+      <div class="row between"><h3>Gesamt</h3><span class="muted">${T.since ? "seit " + esc(dayShort(T.since)) : ""}</span></div>
+      <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">${kpi("Spieler", T.props, "noch keine")}${kpi("Team", T.team, "noch keine")}</div>
+      <details class="more"><summary>Nach Markt</summary>
+        <div class="tablewrap" style="margin-top:10px"><table>${head("Spieler")}<tbody>${pRows}</tbody></table></div>
+        <div class="tablewrap" style="margin-top:14px"><table>${head("Team")}<tbody>${tRows}</tbody></table></div>
+      </details>
+      <details class="more"><summary>Letzte Ergebnisse</summary><div class="inj" style="margin-top:10px">${
+        [...(T.recent ?? []), ...(T.recent_team ?? [])].sort((x, y) => (y.date ?? "").localeCompare(x.date ?? "")).slice(0, 30).map(resultRow).join("") || `<div class="muted">Noch keine.</div>`}</div></details>
     </div>
-    <details class="more"><summary>Alle Märkte und letzte Ergebnisse</summary>
-      <div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Markt</th><th>Treffer</th><th>Quote</th><th>Erwartet</th><th>Rückrechnung</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="inj" style="margin-top:10px">${recent || `<div class="muted">Die ersten Ergebnisse erscheinen, sobald Spiele beendet sind.</div>`}</div>
-    </details>
-    <details class="hint"><summary>So funktioniert's</summary><p>Jeder Vorschlag wird gespeichert und nach dem Spiel abgerechnet: Wäre die Wette wie angezeigt eingetreten? Das misst die Treffsicherheit des Modells, nicht deinen Gewinn. Spieler ohne Einsatz zählen nicht. Rückrechnung: dieselbe Regel an Spielen, die das Modell nicht kannte. Aus beidem lernt die App je Markt eine Korrektur; die angezeigten Wahrscheinlichkeiten sind bereits angepasst.${T.moneyline.n ? ` Sieger-Favoriten: ${T.moneyline.hits} von ${T.moneyline.n} gewonnen (erwartet ${pct(T.moneyline.expected, 0)}).` : ""}</p></details></section>`;
+    <details class="hint"><summary>So funktioniert's</summary><p>Jeder angezeigte Tipp wird gespeichert und nach dem Spiel abgerechnet: Wäre die Wette eingetreten? Das misst die Treffsicherheit des Modells, nicht deinen Gewinn. Soll = durchschnittliche Wahrscheinlichkeit laut Modell; liegt die Quote darunter, war das Modell zu optimistisch. Test = dieselbe Regel an Spielen, die das Modell nicht kannte (nur Spieler). Spieler ohne Einsatz und Unentschieden beim Handicap zählen nicht. Bei Spielern lernt die App aus den Ergebnissen eine Korrektur, die angezeigten Wahrscheinlichkeiten sind bereits angepasst; Team-Tipps werden vorerst nur gezählt.</p></details></section>`;
 }
 
 function openCalc(gid, c) {

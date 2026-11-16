@@ -94,3 +94,27 @@ def test_double_double_probabilities():
     assert doubles.double_probs(mid, al[:1], Rp)[1][0] > doubles.double_probs(mid, al[:1], R)[1][0]
     assert doubles.actual_double(12, 10, 3) == 2 and doubles.actual_double(12, 10, 11) == 3 and doubles.actual_double(30, 9, 9) == 1
     assert doubles.actual_double(8, 12, 4, blk=10) == 2  # blocks count when settling
+
+
+def test_team_settlement_rules():
+    from datetime import date
+
+    from app.betting.suggestions import settle_team
+    from app.db import Game, Suggestion
+    g = Game(id="202611150BOS", season=2027, date=date(2026, 11, 15), home_id="BOS", away_id="NYK", home_pts=110, away_pts=104,
+             line_score={"home": [30, 25, 28, 27], "away": [22, 33, 25, 24]})  # half-time 55:55, quarters 1 and 3 home
+
+    def res(market, sel, line=None):
+        s = Suggestion(kind="team", game_id=g.id, market=market, selection=sel, line=line, raw_prob=0.6, prob=0.6)
+        settle_team(s, g)
+        return s.status
+    assert res("moneyline", "home") == "won" and res("moneyline", "away") == "lost"
+    assert res("spread", "home", -5.5) == "won" and res("spread", "home", -6.5) == "lost" and res("spread", "away", 6.5) == "won"
+    assert res("spread", "home", -6.0) == "void"  # push
+    assert res("total", "over", 213.5) == "won" and res("total", "under", 213.5) == "lost"
+    assert res("team_away:fg", "under", 104.5) == "won" and res("team_home:fg", "over", 110.5) == "lost"
+    assert res("win:q1", "home") == "won" and res("win:q2", "home") == "lost" and res("win:h1", "home") == "lost" and res("win:h1", "draw") == "won"
+    assert res("total:h1", "under", 110.5) == "won"
+    assert res("htft", "dh") == "won" and res("htft", "hh") == "lost"
+    g.line_score = None
+    assert res("win:q1", "home") == "void" and res("moneyline", "home") == "won"
