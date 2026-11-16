@@ -76,7 +76,8 @@ REMOTE="$(git remote get-url origin)"
   git init -q && git checkout -q -b "$STATE_BRANCH"
   git -c user.name="NBA update" -c user.email="noreply@anthropic.com" add -A
   git -c user.name="NBA update" -c user.email="noreply@anthropic.com" commit -qm "state $(date -u +%FT%TZ)"
-  for i in 1 2 3 4; do git push -q -f "$REMOTE" "$STATE_BRANCH" 2>&1 && break; sleep $((i * 5)); done
-) >&2
+  for i in 1 2 3 4; do git push -q -f "$REMOTE" "$STATE_BRANCH" 2>&1 && exit 0; sleep $((i * 5)); done
+  exit 1
+) >&2 && SAVED=true || { SAVED=false; log "WARNING: state could not be pushed to branch $STATE_BRANCH (no push access?)"; }
 rm -rf "$SAVE"
-echo "{\"update\":$RESULT,\"page\":\"phone/dist/index.html\",\"data\":\"phone/dist/data.json\"}"
+echo "{\"update\":$RESULT,\"stateSaved\":$SAVED,\"page\":\"phone/dist/index.html\",\"data\":\"phone/dist/data.json\"}"
