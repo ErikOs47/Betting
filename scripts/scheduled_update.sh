@@ -70,7 +70,8 @@ with session_scope() as db:
         with open(src, "rb") as f, gzip.open(out / (src.name + ".gz"), "wb", 6) as g:
             shutil.copyfileobj(f, g)
 PY
-REMOTE="$(git remote get-url origin)"
+mkdir -p "$SAVE/phone" && cp phone/dist/index.html phone/dist/data.json "$SAVE/phone/"   # finished page for the Claude task
+REMOTE="${NBI_STATE_REMOTE:-$(git remote get-url origin)}"
 (
   cd "$SAVE"
   git init -q && git checkout -q -b "$STATE_BRANCH"

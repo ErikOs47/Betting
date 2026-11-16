@@ -1,0 +1,34 @@
+# Twice-daily data update. Runs the same script as the Claude task, but here the state
+# (database, models, phone page) can be pushed to the "data" branch.
+# Basketball Reference publishes the night's box scores around 5 AM US Eastern (10:00 UTC in winter).
+name: NBA Update
+on:
+  schedule:
+    - cron: "25 10 * * *"   # results of the night
+    - cron: "20 15 * * *"   # injury report / evening games
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency:
+  group: nba-update
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Update and save state
+        env:
+          NBI_STATE_REMOTE: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        run: |
+          bash scripts/scheduled_update.sh 2> update.err | tail -1 | tee result.json
+          grep -q '"stateSaved":true' result.json || { tail -40 update.err; exit 1; }
+      - name: Log on failure
+        if: failure()
+        run: tail -60 update.err /tmp/nbi-update.log || true
