@@ -1,5 +1,12 @@
 # Als Web-App auf dem Handy nutzen
 
+> **Aktueller Betrieb:** Die Handy-Seite läuft ohne eigenen Server als private Seite auf claude.ai und wird
+> zweimal täglich von GitHub Actions aktualisiert – siehe
+> [README: Betrieb ohne eigenen Server](../README.md#betrieb-ohne-eigenen-server-so-läuft-es-aktuell).
+> Ergebnisse der Nacht sind ab etwa 11:50 Uhr (Winterzeit) drin, die Abend-Prognosen ab etwa 16:50 Uhr.
+> Die Wege A–C unten betreffen das volle Dashboard (Next.js + FastAPI) und werden nur gebraucht, wenn du es
+> selbst betreiben willst.
+
 Die App ist eine **installierbare Web-App (PWA)**: Sie läuft im Browser, lässt sich aber wie eine normale App auf den
 Homescreen legen (eigenes Icon, Vollbild, untere Tab-Leiste). Dafür muss sie auf einem Rechner laufen, den dein Handy
 erreicht. Es gibt drei Wege – vom einfachsten zum bequemsten:

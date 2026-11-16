@@ -383,3 +383,57 @@ def stats(db: Session) -> dict:
                                  if m in SUGGEST_MARKETS},
                      "dd_all": prior.get("markets", {}).get("dd_all")},
     }
+
+
+# ------------------------------------------------------------------ durable history (branch "history")
+HISTORY_FIELDS = ("kind", "game_id", "player_id", "team_id", "market", "selection", "line", "raw_prob", "prob", "mu", "l10",
+                  "status", "actual", "created_at", "settled_at")
+
+
+def _hkey(r) -> tuple:
+    g = (lambda k: r[k]) if isinstance(r, dict) else (lambda k: getattr(r, k))
+    return (g("game_id"), g("kind"), g("market"), g("selection"), g("player_id"), g("line"))
+
+
+def export_history(db: Session, out_dir) -> dict:
+    """Write every settled suggestion as JSON lines, one file per month of the game date. Only finished outcomes
+    are written, so files of past months never change and git keeps a readable, append-only record."""
+    import json
+    from pathlib import Path
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = db.execute(select(Suggestion, Game.date).join(Game, Game.id == Suggestion.game_id)
+                      .where(Suggestion.status != "open").order_by(Game.date, Suggestion.game_id, Suggestion.id)).all()
+    files: dict[str, list[str]] = {}
+    for s, d in rows:
+        rec = {"date": str(d), **{k: getattr(s, k) for k in HISTORY_FIELDS}}
+        for k in ("created_at", "settled_at"):
+            rec[k] = rec[k].isoformat() if rec[k] else None
+        files.setdefault(f"{d:%Y-%m}", []).append(json.dumps(rec, ensure_ascii=False, sort_keys=True))
+    for month, lines in files.items():
+        (out / f"suggestions-{month}.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"rows": len(rows), "files": len(files)}
+
+
+def import_history(db: Session, in_dir) -> dict:
+    """Recovery: add settled suggestions from the history files that the database does not have."""
+    import json
+    from datetime import datetime
+    from pathlib import Path
+    have = {_hkey(s) for s in db.scalars(select(Suggestion))}
+    added = 0
+    for f in sorted(Path(in_dir).glob("suggestions-*.jsonl")):
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            if _hkey(r) in have:
+                continue
+            kw = {k: r.get(k) for k in HISTORY_FIELDS}
+            for k in ("created_at", "settled_at"):
+                kw[k] = datetime.fromisoformat(kw[k]) if kw[k] else None
+            db.add(Suggestion(**kw))
+            have.add(_hkey(r))
+            added += 1
+    db.flush()
+    return {"added": added}

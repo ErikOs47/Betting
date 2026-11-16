@@ -154,5 +154,22 @@ def scheduled_update(out: str = "../phone/data.json") -> None:
     typer.echo(json.dumps(summary, default=str))  # one line, parsed by scripts/scheduled_update.sh
 
 
+@app.command("history-export")
+def history_export(out: str) -> None:
+    """Write settled suggestions to monthly JSON-lines files (saved on the git branch "history")."""
+    from app.betting import suggestions
+    with session_scope() as db:
+        _p(suggestions.export_history(db, out))
+
+
+@app.command("history-import")
+def history_import(src: str) -> None:
+    """Recovery: add settled suggestions from history files that are missing in the database."""
+    from app.betting import suggestions
+    init_db()
+    with session_scope() as db:
+        _p(suggestions.import_history(db, src))
+
+
 if __name__ == "__main__":
     app()

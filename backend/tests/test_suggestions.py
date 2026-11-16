@@ -118,3 +118,24 @@ def test_team_settlement_rules():
     assert res("htft", "dh") == "won" and res("htft", "hh") == "lost"
     g.line_score = None
     assert res("win:q1", "home") == "void" and res("moneyline", "home") == "won"
+
+
+def test_history_roundtrip(db, tmp_path):
+    from datetime import date
+
+    from sqlalchemy import func, select
+
+    from app.betting.suggestions import export_history, import_history
+    from app.db import Game, Suggestion
+    db.add(Game(id="202611150BOS", season=2027, date=date(2026, 11, 15), home_id="BOS", away_id="NYK", status="final",
+                home_pts=110, away_pts=104))
+    db.add(Suggestion(kind="team", game_id="202611150BOS", market="moneyline", selection="home", raw_prob=0.7, prob=0.7, status="won", actual=6.0))
+    db.add(Suggestion(kind="team", game_id="202611150BOS", market="total", selection="over", line=213.5, raw_prob=0.55, prob=0.55, status="open"))
+    db.flush()
+    assert export_history(db, tmp_path) == {"rows": 1, "files": 1}
+    assert (tmp_path / "suggestions-2026-11.jsonl").read_text().count("\n") == 1
+    assert import_history(db, tmp_path) == {"added": 0}  # nothing missing
+    db.query(Suggestion).filter_by(status="won").delete()
+    db.flush()
+    assert import_history(db, tmp_path) == {"added": 1}
+    assert db.scalar(select(func.count()).select_from(Suggestion).where(Suggestion.status == "won")) == 1

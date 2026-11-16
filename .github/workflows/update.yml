@@ -4,8 +4,12 @@
 name: NBA Update
 on:
   schedule:
-    - cron: "25 10 * * *"   # results of the night
-    - cron: "20 15 * * *"   # injury report / evening games
+    # Each slot twice: GitHub may delay or drop scheduled runs (it skipped one on 2026-11-16);
+    # a second run is harmless (same data, suggestions of open games are simply replaced).
+    - cron: "15 10 * * *"   # results of the night (published ~10:06 UTC)
+    - cron: "38 10 * * *"
+    - cron: "5 15 * * *"    # injury report / evening games
+    - cron: "28 15 * * *"
   workflow_dispatch: {}
 permissions:
   contents: write

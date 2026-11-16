@@ -12,6 +12,7 @@ Web-Dashboard.
 ## Inhalt
 
 - [Auf dem Handy nutzen](docs/HANDY.md)
+- [Betrieb ohne eigenen Server (aktuell)](#betrieb-ohne-eigenen-server-so-läuft-es-aktuell)
 - [Schnellstart mit Docker](#schnellstart-mit-docker)
 - [Lokale Installation ohne Docker](#lokale-installation-ohne-docker)
 - [Daten laden, trainieren, backtesten](#daten-laden-trainieren-backtesten)
@@ -21,6 +22,39 @@ Web-Dashboard.
 - [Tests](#tests)
 - [Grenzen und nächste Schritte](#grenzen-und-nächste-schritte)
 - Weitere Dokumente: [Architektur](docs/ARCHITEKTUR.md) · [Methodik](docs/METHODIK.md) · [Datenquellen und Kosten](docs/API_KOSTEN.md)
+
+## Betrieb ohne eigenen Server (so läuft es aktuell)
+
+Statt eines dauernd laufenden Servers rechnet **GitHub Actions** zweimal täglich, und eine geplante Claude-Aufgabe
+veröffentlicht das Ergebnis als private Handy-Seite auf claude.ai. Kosten: keine (öffentliches Repo, Actions frei);
+die Claude-Aufgabe verbraucht etwas Claude-Kontingent pro Lauf.
+
+```
+GitHub Actions „NBA Update“ (.github/workflows/update.yml)
+  10:15 + 10:38 UTC   Ergebnisse der Nacht (Basketball Reference veröffentlicht sie gesammelt gegen 10:06 UTC)
+  15:05 + 15:28 UTC   Injury Report, Prognosen für den Abend
+  → scripts/scheduled_update.sh: Zustand laden → Ergebnisse, Verletzungen, Training, Prognosen,
+    Tipps abrechnen/speichern → Handy-Seite bauen → sichern
+Claude-Aufgabe „NBA Update“ (10:50 + 15:50 UTC)
+  → scripts/publish_prep.sh holt die fertige Seite und veröffentlicht sie
+```
+
+Jeder Termin ist doppelt angelegt, weil GitHub geplante Läufe verzögern oder auslassen kann; ein zweiter Lauf
+schadet nicht. Ist der gesicherte Stand beim Veröffentlichen älter als 3 Stunden, rechnet die Claude-Aufgabe selbst
+(kann dann aber nichts sichern). Deutsche Zeit = UTC + 1 Stunde (Sommerzeit + 2).
+
+**Wo die Daten liegen**
+
+| Branch | Inhalt | Schreibweise |
+|---|---|---|
+| `data` | Datenbank, aktive Modelle, fertige Handy-Seite | ein Commit, wird bei jedem Lauf ersetzt |
+| `history` | jeder abgerechnete Tipp als Zeile, eine Datei pro Monat (`suggestions/suggestions-JJJJ-MM.jsonl`) | wird nur ergänzt, nie überschrieben |
+
+Geht der Zustand auf `data` verloren, lässt sich die Tipp-Bilanz wiederherstellen:
+`python -m app.cli history-import <Checkout von history>/suggestions`.
+
+**Extra-Update:** in der GitHub-App unter *Actions → NBA Update → Run workflow* starten, nach ca. 5 Minuten die
+Claude-Aufgabe „NBA Update“ ausführen (oder Claude bitten, beides zu tun).
 
 ## Schnellstart mit Docker
 

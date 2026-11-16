@@ -10,13 +10,14 @@ Vertiefung: `docs/ARCHITEKTUR.md`, `docs/METHODIK.md`, `docs/HANDY.md`, `docs/AP
 ## 1. Was wirklich läuft (Produktivpfad)
 
 ```
-GitHub Actions (.github/workflows/update.yml, 10:25 + 15:20 UTC, auch manuell)
+GitHub Actions (.github/workflows/update.yml, 10:15/10:38 + 15:05/15:28 UTC, je doppelt; auch manuell)
   └─ scripts/scheduled_update.sh
        1. Zustand vom Branch "data" holen (state/nbi.db.gz, state/artifacts/*.pkl.gz)
        2. app.cli scheduled-update: Ergebnisse → Injury Report → (Odds) → Training falls fällig
           → Prognosen → Tipps abrechnen/speichern → phone/data.json
        3. phone/build.py → phone/dist/index.html (+ data.json)
        4. Zustand + fertige Seite als EIN Commit per force-push auf Branch "data"
+       5. abgerechnete Tipps als Monatsdateien auf Branch "history" (nur anhängen, nie force)
 Claude-Aufgabe "NBA Update" (Trigger trig_01CLETnGpLupJ4XvLENTvpNb, Sonnet, 10:50 + 15:50 UTC)
   └─ scripts/publish_prep.sh  (holt phone/* vom Branch "data"; >3 h alt → rechnet selbst, ohne Sichern)
   └─ Artifact publish → https://claude.ai/artifact/2HRgzDTKyAJiNLFcoTUfrE  (private Handy-Seite)
@@ -52,7 +53,7 @@ Handicap, Über/Unter, Team-Punkte, 1. Halbzeit, Viertel, Halbzeit/Endstand.
 ## 3. Befehle
 
 ```bash
-cd backend && ../.venv/bin/python -m pytest -q          # 60 Tests, ~100 s (braucht node)
+cd backend && ../.venv/bin/python -m pytest -q          # 61 Tests, ~100 s (braucht node)
 python3 phone/build.py phone/data.json                   # Seite bauen → phone/dist, phone/preview
 (cd phone/preview && python3 -m http.server 8090)        # Vorschau; mit Playwright bei 390 px prüfen
 NBI_SKIP_RESTORE=1 bash scripts/scheduled_update.sh      # voller Lauf mit lokaler DB (pusht "data"!)
@@ -95,8 +96,10 @@ abgelehnt, denselben Aufruf unverändert wiederholen. Danach `ArtifactComments w
 5. **Ergebnisse erst gegen 11 Uhr deutscher Zeit** (BRef-Batch ~5 Uhr ET). Der Workflow-Zeitplan ist UTC
    und verschiebt sich in der Sommerzeit um eine Stunde; GitHub-Cron kann sich zusätzlich verspäten.
 6. **Zustand = ein force-gepushter Commit** auf `data` (~26 MB, DB wächst; GitHub-Limit 100 MB/Datei).
-   Keine Historie, kein Backup. Zwei gleichzeitige Läufe würden sich überschreiben (Workflow hat
-   `concurrency`, ein manueller Lauf aus einer Sitzung nicht).
+   Nur die Tipp-Bilanz ist dauerhaft gesichert (Branch `history`, Wiederherstellung mit
+   `app.cli history-import`); DB und Modelle haben kein Backup. Zwei gleichzeitige Läufe würden sich
+   überschreiben (Workflow hat `concurrency`, ein manueller Lauf aus einer Sitzung nicht).
+   GitHub-Cron ist unzuverlässig (am 16.11. einen Termin ausgelassen) → jeder Termin doppelt.
 7. **Claude-Aufgabe kann nicht pushen** (kein Repo angebunden, 403). Ihr Fallback-Lauf speichert nichts.
 8. **Team-Tipps vom 15.11.2026 sind nachgetragen** (gleiche Regel, Prognose von vor Spielbeginn), nicht
    live gespeichert.
@@ -108,15 +111,14 @@ abgelehnt, denselben Aufruf unverändert wiederholen. Danach `ArtifactComments w
 ## 6. Offene To-dos
 
 - [ ] Ersten **geplanten** Workflow-Lauf und den folgenden Claude-Publish prüfen (bisher nur manuell
-      ausgelöst getestet).
+      ausgelöst getestet; der Termin 15:20 UTC am 16.11. wurde von GitHub ausgelassen, die Claude-Aufgabe
+      um 15:51 scheiterte am Nutzungslimit).
 - [ ] Sommerzeit: Cron-Zeiten des Workflows und des Triggers anpassen oder zwei Zeitfenster vorsehen.
 - [ ] Team-Tipps: nach einigen hundert Ergebnissen Kalibrierung je Kategorie auswerten, dann Korrektur
       wie bei Spielern (`learned_k`) einführen.
 - [ ] Bilanz um Zeitfenster erweitern (z. B. 7/30 Tage) und Verlauf anzeigen.
 - [ ] Größe der DB beobachten; bei Bedarf alte Prognosen/Quoten-Snapshots ausdünnen.
 - [ ] Zweite Ergebnisquelle als Fallback für BRef evaluieren.
-- [ ] `docs/HANDY.md` und `README.md` auf den Workflow-Ablauf aktualisieren (beschreiben teils noch den
-      alten Ablauf mit Update durch die Claude-Aufgabe um 7:50).
 - [ ] Optional, nur auf Wunsch: Odds-API-Key einbinden und Client live testen (Kosten: `docs/API_KOSTEN.md`).
 
 ## 7. Nicht tun

@@ -81,4 +81,26 @@ REMOTE="${NBI_STATE_REMOTE:-$(git remote get-url origin)}"
   exit 1
 ) >&2 && SAVED=true || { SAVED=false; log "WARNING: state could not be pushed to branch $STATE_BRANCH (no push access?)"; }
 rm -rf "$SAVE"
-echo "{\"update\":$RESULT,\"stateSaved\":$SAVED,\"page\":\"phone/dist/index.html\",\"data\":\"phone/dist/data.json\"}"
+
+# ---- tip history: settled suggestions as monthly JSON-lines files on branch "history".
+# Unlike "data" this branch is never force-pushed, so every outcome stays in git even if the state is lost.
+# Recovery: python -m app.cli history-import <checkout of branch history>/suggestions
+HIST_BRANCH="${NBI_HISTORY_BRANCH:-history}"
+HIST="$(mktemp -d)"
+(
+  cd "$HIST"
+  git init -q
+  if git fetch -q --depth 1 "$REMOTE" "$HIST_BRANCH" 2>/dev/null; then git checkout -q -b "$HIST_BRANCH" FETCH_HEAD
+  else git checkout -q --orphan "$HIST_BRANCH"; fi
+) >&2
+(cd backend && ../.venv/bin/python -m app.cli history-export "$HIST/suggestions" >/dev/null)
+(
+  cd "$HIST"
+  git add -A
+  git diff --cached --quiet && exit 0   # nothing new settled
+  git -c user.name="NBA update" -c user.email="noreply@anthropic.com" commit -qm "tips settled up to $(date -u +%F)"
+  for i in 1 2 3; do git push -q "$REMOTE" "$HIST_BRANCH" 2>&1 && exit 0; sleep $((i * 5)); done
+  exit 1
+) >&2 && HSAVED=true || { HSAVED=false; log "WARNING: tip history could not be pushed to branch $HIST_BRANCH"; }
+rm -rf "$HIST"
+echo "{\"update\":$RESULT,\"stateSaved\":$SAVED,\"historySaved\":$HSAVED,\"page\":\"phone/dist/index.html\",\"data\":\"phone/dist/data.json\"}"
