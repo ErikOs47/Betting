@@ -1,5 +1,5 @@
 # Twice-daily data update. Runs the same script as the Claude task, but here the state
-# (database, models, phone page) can be pushed to the "data" branch.
+# (database, models, phone page) can be pushed to the "data" branch
 # Basketball Reference publishes the night's box scores around 5 AM US Eastern (10:00 UTC in winter).
 name: NBA Update
 on:
