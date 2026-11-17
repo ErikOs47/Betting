@@ -23,6 +23,7 @@ Claude-Aufgabe "NBA Update" (Trigger trig_01CLETnGpLupJ4XvLENTvpNb, Sonnet, 10:5
   └─ Artifact publish → https://claude.ai/artifact/2HRgzDTKyAJiNLFcoTUfrE  (private Handy-Seite)
 ```
 
+- Standard-Branch ist `main` (seit 17.11.2026; geplante Workflows laufen nur vom Standard-Branch).
 - Branches: `main` und `claude/nba-betting-platform-neo6i9` immer **beide** pushen
   (`git push origin HEAD:claude/nba-betting-platform-neo6i9 HEAD:main`). `data` nie von Hand bearbeiten.
 - Die Handy-Seite ist statisches HTML (`phone/index.src.html` + eingebettetes `phone/nbmath.js`), lädt
@@ -111,8 +112,9 @@ abgelehnt, denselben Aufruf unverändert wiederholen. Danach `ArtifactComments w
 ## 6. Offene To-dos
 
 - [ ] Ersten **geplanten** Workflow-Lauf und den folgenden Claude-Publish prüfen (bisher nur manuell
-      ausgelöst getestet; der Termin 15:20 UTC am 16.11. wurde von GitHub ausgelassen, die Claude-Aufgabe
-      um 15:51 scheiterte am Nutzungslimit).
+      ausgelöst getestet; bis 17.11. startete kein einziger geplanter Lauf. Danach Standard-Branch von
+      `claude/...` auf `main` umgestellt und Workflow aus-/eingeschaltet. Falls es weiter nicht startet:
+      Claude-Aufgabe startet den Workflow per API mit Fine-grained Token, nur Actions read/write).
 - [ ] Sommerzeit: Cron-Zeiten des Workflows und des Triggers anpassen oder zwei Zeitfenster vorsehen.
 - [ ] Team-Tipps: nach einigen hundert Ergebnissen Kalibrierung je Kategorie auswerten, dann Korrektur
       wie bei Spielern (`learned_k`) einführen.
