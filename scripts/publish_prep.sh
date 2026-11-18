@@ -17,4 +17,4 @@ if [ "$AGE_MIN" -gt 180 ]; then
 else
   SRC=workflow
 fi
-python3 -c "import json;d=json.load(open('phone/dist/data.json'));t=d['suggestions']['track']['props'];print(json.dumps({'source':'$SRC','ageMin':$AGE_MIN,'generatedAt':d['generatedAt'],'games':len(d['games']),'lastResult':d['data']['lastResult'],'tracked':t['n']}))"
+python3 -c "import json;d=json.load(open('phone/dist/data.json'));t=d['suggestions']['track']['props'];print(json.dumps({'dispatch':'${NBI_DISPATCH:-none}','source':'$SRC','ageMin':$AGE_MIN,'generatedAt':d['generatedAt'],'games':len(d['games']),'lastResult':d['data']['lastResult'],'tracked':t['n']}))"
