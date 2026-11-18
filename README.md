@@ -25,23 +25,15 @@ Web-Dashboard.
 
 ## Betrieb ohne eigenen Server (so läuft es aktuell)
 
-Statt eines dauernd laufenden Servers rechnet **GitHub Actions** zweimal täglich, und eine geplante Claude-Aufgabe
-veröffentlicht das Ergebnis als private Handy-Seite auf claude.ai. Kosten: keine (öffentliches Repo, Actions frei);
-die Claude-Aufgabe verbraucht etwas Claude-Kontingent pro Lauf.
+Statt eines dauernd laufenden Servers weckt eine geplante Claude-Aufgabe zweimal täglich (13:50 und 16:50 Uhr
+deutscher Zeit) eine feste Claude-Sitzung, der dieses Repo angebunden ist. Sie führt `scripts/scheduled_update.sh`
+aus (Ergebnisse, Verletzungen, Training, Prognosen, Tipps abrechnen, Handy-Seite bauen, Zustand sichern) und
+veröffentlicht die Seite als private Seite auf claude.ai. Kosten: etwas Claude-Kontingent pro Lauf.
 
-```
-GitHub Actions „NBA Update“ (.github/workflows/update.yml)
-  10:15 + 10:38 UTC   Ergebnisse der Nacht (Basketball Reference veröffentlicht sie gesammelt gegen 10:06 UTC)
-  15:05 + 15:28 UTC   Injury Report, Prognosen für den Abend
-  → scripts/scheduled_update.sh: Zustand laden → Ergebnisse, Verletzungen, Training, Prognosen,
-    Tipps abrechnen/speichern → Handy-Seite bauen → sichern
-Claude-Aufgabe „NBA Update“ (10:50 + 15:50 UTC)
-  → scripts/publish_prep.sh holt die fertige Seite und veröffentlicht sie
-```
-
-Jeder Termin ist doppelt angelegt, weil GitHub geplante Läufe verzögern oder auslassen kann; ein zweiter Lauf
-schadet nicht. Ist der gesicherte Stand beim Veröffentlichen älter als 3 Stunden, rechnet die Claude-Aufgabe selbst
-(kann dann aber nichts sichern). Deutsche Zeit = UTC + 1 Stunde (Sommerzeit + 2).
+Der Vormittagslauf liegt bewusst bei 13:50 Uhr: Basketball Reference stellt die Ergebnisse der Nacht gesammelt und
+unterschiedlich spät online (beobachtet zwischen 11 und nach 12 Uhr). Der GitHub-Workflow `.github/workflows/update.yml`
+führt dasselbe Skript aus und bleibt als Reserve (von Hand startbar); GitHubs eigener Zeitplan hat für dieses Repo
+nie ausgelöst.
 
 **Wo die Daten liegen**
 
@@ -53,8 +45,7 @@ schadet nicht. Ist der gesicherte Stand beim Veröffentlichen älter als 3 Stund
 Geht der Zustand auf `data` verloren, lässt sich die Tipp-Bilanz wiederherstellen:
 `python -m app.cli history-import <Checkout von history>/suggestions`.
 
-**Extra-Update:** in der GitHub-App unter *Actions → NBA Update → Run workflow* starten, nach ca. 5 Minuten die
-Claude-Aufgabe „NBA Update“ ausführen (oder Claude bitten, beides zu tun).
+**Extra-Update:** in Claude unter den geplanten Aufgaben „NBA Update“ jetzt ausführen (oder Claude darum bitten).
 
 ## Schnellstart mit Docker
 

@@ -1,9 +1,9 @@
 # Als Web-App auf dem Handy nutzen
 
 > **Aktueller Betrieb:** Die Handy-Seite läuft ohne eigenen Server als private Seite auf claude.ai und wird
-> zweimal täglich von GitHub Actions aktualisiert – siehe
+> zweimal täglich (13:50 und 16:50 Uhr) von einer geplanten Claude-Aufgabe aktualisiert – siehe
 > [README: Betrieb ohne eigenen Server](../README.md#betrieb-ohne-eigenen-server-so-läuft-es-aktuell).
-> Ergebnisse der Nacht sind ab etwa 11:50 Uhr (Winterzeit) drin, die Abend-Prognosen ab etwa 16:50 Uhr.
+> Ergebnisse der Nacht sind ab etwa 13:50 Uhr drin, die Abend-Prognosen ab etwa 16:50 Uhr.
 > Die Wege A–C unten betreffen das volle Dashboard (Next.js + FastAPI) und werden nur gebraucht, wenn du es
 > selbst betreiben willst.
 

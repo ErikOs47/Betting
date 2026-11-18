@@ -1,12 +1,12 @@
 # Twice-daily data update. Runs the same script as the Claude task, but here the state
 # (database, models, phone page) can be pushed to the "data" branch
-# Basketball Reference publishes the night's box scores around 5 AM US Eastern (10:00 UTC in winter).
+# Reserve only: the production run is a scheduled Claude task (see CLAUDE.md); GitHub's schedule never fired here.
 name: NBA Update
 on:
   schedule:
     # Each slot twice: GitHub may delay or drop scheduled runs (it skipped one on 2026-11-16);
     # a second run is harmless (same data, suggestions of open games are simply replaced).
-    - cron: "15 10 * * *"   # results of the night (published ~10:06 UTC)
+    - cron: "15 10 * * *"   # results of the night (Basketball Reference posts them between ~10 and 12 UTC)
     - cron: "38 10 * * *"
     - cron: "5 15 * * *"    # injury report / evening games
     - cron: "28 15 * * *"

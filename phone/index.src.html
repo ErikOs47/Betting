@@ -225,7 +225,7 @@ footer { color: var(--ink-3); font-size: 0.76rem; display: grid; gap: 6px; paddi
       <label>Bankroll (€)<input id="bankroll" inputmode="decimal" autocomplete="off"></label>
       <label>Wettsteuer auf Gewinn (%)<input id="tax" inputmode="decimal" autocomplete="off"></label>
     </div>
-    <p class="muted" style="margin:0">Einsatzvorschläge: ¼ Kelly, höchstens <span id="maxBetTxt">1 %</span> der Bankroll pro Wette. Die Daten werden täglich gegen 11:50 und 16:50 Uhr aktualisiert (Basketball Reference stellt die Ergebnisse der Nacht erst gegen 11 Uhr online). Für ein Extra-Update in Claude Code die Aufgabe „NBA Update“ ausführen lassen (dauert etwa 5 Minuten).</p>
+    <p class="muted" style="margin:0">Einsatzvorschläge: ¼ Kelly, höchstens <span id="maxBetTxt">1 %</span> der Bankroll pro Wette. Die Daten werden täglich gegen 13:50 und 16:50 Uhr aktualisiert (Basketball Reference stellt die Ergebnisse der Nacht erst am Vormittag online). Für ein Extra-Update in Claude die geplante Aufgabe „NBA Update“ ausführen (dauert etwa 3 Minuten).</p>
   </section>
 
   <div id="notices" style="display:grid;gap:8px"></div>
@@ -342,7 +342,7 @@ function renderStatus() {
   const n = [];
   if (age >= 13) n.push(`<div class="notice">Die Daten sind ${Math.round(age)} Stunden alt. Verletzungen können sich seitdem geändert haben.</div>`);
   if (D.yesterday?.date && D.data.lastResult < D.yesterday.date && !D.data.staleResults)
-    n.push(`<div class="notice">Die Ergebnisse vom ${esc(dayShort(D.yesterday.date))} sind noch nicht da: Basketball Reference stellt sie erst gegen 11 Uhr online. Die Auswertung der Tipps folgt mit dem nächsten Update.</div>`);
+    n.push(`<div class="notice">Die Ergebnisse vom ${esc(dayShort(D.yesterday.date))} sind noch nicht da: Basketball Reference stellt sie erst am Vormittag online. Die Auswertung der Tipps folgt mit dem nächsten Update.</div>`);
   if (D.data.staleResults) n.push(`<div class="notice bad">Für ${D.data.staleResults} vergangene Spiele fehlen Ergebnisse. Die Prognosen sind deshalb deaktiviert.</div>`);
   $("#notices").innerHTML = n.join("");
   const bt = D.backtest?.period;

@@ -10,17 +10,19 @@ Vertiefung: `docs/ARCHITEKTUR.md`, `docs/METHODIK.md`, `docs/HANDY.md`, `docs/AP
 ## 1. Was wirklich läuft (Produktivpfad)
 
 ```
-GitHub Actions (.github/workflows/update.yml, 10:15/10:38 + 15:05/15:28 UTC, je doppelt; auch manuell)
-  └─ scripts/scheduled_update.sh
-       1. Zustand vom Branch "data" holen (state/nbi.db.gz, state/artifacts/*.pkl.gz)
-       2. app.cli scheduled-update: Ergebnisse → Injury Report → (Odds) → Training falls fällig
-          → Prognosen → Tipps abrechnen/speichern → phone/data.json
-       3. phone/build.py → phone/dist/index.html (+ data.json)
-       4. Zustand + fertige Seite als EIN Commit per force-push auf Branch "data"
-       5. abgerechnete Tipps als Monatsdateien auf Branch "history" (nur anhängen, nie force)
-Claude-Aufgabe "NBA Update" (Trigger trig_01CLETnGpLupJ4XvLENTvpNb, Sonnet, 10:50 + 15:50 UTC)
-  └─ scripts/publish_prep.sh  (holt phone/* vom Branch "data"; >3 h alt → rechnet selbst, ohne Sichern)
-  └─ Artifact publish → https://claude.ai/artifact/2HRgzDTKyAJiNLFcoTUfrE  (private Handy-Seite)
+Claude-Aufgabe "NBA Update" (Trigger trig_01AFQgt8ntiqBarzaWA94YMB, 13:50 + 16:50 Europe/Berlin)
+  └─ weckt die feste Sitzung "NBA Update (automatisch)" (session_01GYJVHVEM5wmua8Q9wV3DHh, Sonnet,
+     Repo angebunden → darf pushen)
+       └─ scripts/scheduled_update.sh
+            1. Zustand vom Branch "data" holen (state/nbi.db.gz, state/artifacts/*.pkl.gz)
+            2. app.cli scheduled-update: Ergebnisse → Injury Report → (Odds) → Training falls fällig
+               → Prognosen → Tipps abrechnen/speichern → phone/data.json
+            3. phone/build.py → phone/dist/index.html (+ data.json)
+            4. Zustand + fertige Seite als EIN Commit per force-push auf Branch "data"
+            5. abgerechnete Tipps als Monatsdateien auf Branch "history" (nur anhängen, nie force)
+       └─ Artifact publish → https://claude.ai/artifact/2HRgzDTKyAJiNLFcoTUfrE  (private Handy-Seite)
+GitHub Actions (.github/workflows/update.yml): gleiches Skript, nur Reserve / von Hand
+  (geplante Läufe sind bei GitHub für dieses Repo nie gestartet, Stand 18.11.2026)
 ```
 
 - Standard-Branch ist `main` (seit 17.11.2026; geplante Workflows laufen nur vom Standard-Branch).
@@ -94,14 +96,18 @@ abgelehnt, denselben Aufruf unverändert wiederholen. Danach `ArtifactComments w
 4. **Abgeleitete Märkte** (Viertel, Halbzeit, Team-Punkte, HZ/Endstand): einfache lineare Skalierung mit
    Normalverteilung, n = 1.348 Spiele, nicht gegen Marktquoten geprüft. Double/Triple-Double: feste
    Korrelationsmatrix für alle Spieler.
-5. **Ergebnisse erst gegen 11 Uhr deutscher Zeit** (BRef-Batch ~5 Uhr ET). Der Workflow-Zeitplan ist UTC
-   und verschiebt sich in der Sommerzeit um eine Stunde; GitHub-Cron kann sich zusätzlich verspäten.
+5. **Ergebnisse kommen spät und unregelmäßig** (BRef: 16.11. ~11:06, 18.11. um 11:50 noch nicht da).
+   Deshalb Vormittagslauf erst 13:50 (Trigger mit CRON_TZ=Europe/Berlin, folgt der Sommerzeit).
 6. **Zustand = ein force-gepushter Commit** auf `data` (~26 MB, DB wächst; GitHub-Limit 100 MB/Datei).
    Nur die Tipp-Bilanz ist dauerhaft gesichert (Branch `history`, Wiederherstellung mit
    `app.cli history-import`); DB und Modelle haben kein Backup. Zwei gleichzeitige Läufe würden sich
    überschreiben (Workflow hat `concurrency`, ein manueller Lauf aus einer Sitzung nicht).
    GitHub-Cron ist unzuverlässig (am 16.11. einen Termin ausgelassen) → jeder Termin doppelt.
-7. **Claude-Aufgabe kann nicht pushen** (kein Repo angebunden, 403). Ihr Fallback-Lauf speichert nichts.
+7. Geplante Aufgaben, die eine **neue** Sitzung starten, haben kein Repo und können nicht pushen (403);
+   GitHub-Schlüssel lassen sich in der Umgebung nicht hinterlegen. Deshalb weckt der Trigger eine feste
+   Sitzung mit angebundenem Repo. Deren Kontext wächst mit jedem Lauf (Autokompaktierung ab ~780k);
+   wird sie archiviert oder kaputt, neue Sitzung mit `create_session(source_url=Repo)` anlegen und den
+   Trigger neu anlegen (persistent_session_id ist nicht änderbar).
 8. **Team-Tipps vom 15.11.2026 sind nachgetragen** (gleiche Regel, Prognose von vor Spielbeginn), nicht
    live gespeichert.
 9. `stats.nba.com` und `cdn.nba.com` sind aus Rechenzentren gesperrt → BRef ist die einzige
@@ -111,11 +117,7 @@ abgelehnt, denselben Aufruf unverändert wiederholen. Danach `ArtifactComments w
 
 ## 6. Offene To-dos
 
-- [ ] Ersten **geplanten** Workflow-Lauf und den folgenden Claude-Publish prüfen (bisher nur manuell
-      ausgelöst getestet; bis 17.11. startete kein einziger geplanter Lauf. Danach Standard-Branch von
-      `claude/...` auf `main` umgestellt und Workflow aus-/eingeschaltet. Falls es weiter nicht startet:
-      Claude-Aufgabe startet den Workflow per API mit Fine-grained Token, nur Actions read/write).
-- [ ] Sommerzeit: Cron-Zeiten des Workflows und des Triggers anpassen oder zwei Zeitfenster vorsehen.
+- [ ] Ersten geplanten Lauf der festen Sitzung (18.11., 13:50) prüfen.
 - [ ] Team-Tipps: nach einigen hundert Ergebnissen Kalibrierung je Kategorie auswerten, dann Korrektur
       wie bei Spielern (`learned_k`) einführen.
 - [ ] Bilanz um Zeitfenster erweitern (z. B. 7/30 Tage) und Verlauf anzeigen.
