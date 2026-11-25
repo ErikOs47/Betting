@@ -656,11 +656,14 @@ function trackCard() {
   if (!T) return "";
   const bt = T.backtest?.markets ?? {};
   const kpi = (k, x, sub) => `<div class="kpi"><div class="k">${k}</div><div class="v num">${x && x.n ? pct(x.hit_rate, 0) : "–"}</div><div class="s num">${x && x.n ? `${x.hits} von ${x.n} · Soll ${pct(x.expected, 0)}` : sub}</div></div>`;
+  const merge = (a, b) => { const xs = [a, b].filter((x) => x && x.n); if (!xs.length) return null; const n = xs.reduce((t, x) => t + x.n, 0), h = xs.reduce((t, x) => t + x.hits, 0);
+    return { n, hits: h, hit_rate: h / n, expected: xs.reduce((t, x) => t + x.expected * x.n, 0) / n }; };
+  const split = (src) => `${kpi("Punkte", src?.by_market?.points, "keine")}${kpi("DD / TD", merge(src?.by_market?.dd, src?.by_market?.td), "keine")}${kpi("Team", src?.team, "keine")}`;
   const line = (name, l, extra = "") => `<tr><td>${name}</td><td>${l.n ? `${l.hits}/${l.n}` : "–"}</td><td>${pct(l.hit_rate, 0)}</td><td>${pct(l.expected, 0)}</td>${extra}</tr>`;
   const L = T.last;
   const lastHtml = L && L.date ? `<div class="section" style="gap:8px">
       <div class="row between"><h3>Letzte Nacht</h3><span class="muted">${esc(dayShort(L.date))}</span></div>
-      <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">${kpi("Spieler", L.props, "keine")}${kpi("Team", L.team, "keine")}</div>
+      <div class="kpis">${split(L)}</div>
       ${[["Spieler-Tipps", L.items.filter((r) => r.name != null)], ["Team-Tipps", L.items.filter((r) => r.name == null)]].filter(([, xs]) => xs.length).map(([t, xs]) =>
         `<details class="more"><summary>${t} der Nacht (${xs.length})</summary><div class="inj" style="margin-top:10px">${xs.map(resultRow).join("")}</div></details>`).join("")}
     </div>` : `<div class="muted">Noch keine abgerechneten Tipps.</div>`;
@@ -671,7 +674,7 @@ function trackCard() {
     ${lastHtml}
     <div class="section" style="gap:8px">
       <div class="row between"><h3>Gesamt</h3><span class="muted">${T.since ? "seit " + esc(dayShort(T.since)) : ""}</span></div>
-      <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">${kpi("Spieler", T.props, "noch keine")}${kpi("Team", T.team, "noch keine")}</div>
+      <div class="kpis">${split(T)}</div>
       <details class="more"><summary>Nach Markt</summary>
         <div class="tablewrap" style="margin-top:10px"><table>${head("Spieler")}<tbody>${pRows}</tbody></table></div>
         <div class="tablewrap" style="margin-top:14px"><table>${head("Team")}<tbody>${tRows}</tbody></table></div>
