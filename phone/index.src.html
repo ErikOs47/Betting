@@ -660,10 +660,12 @@ function trackCard() {
     return { n, hits: h, hit_rate: h / n, expected: xs.reduce((t, x) => t + x.expected * x.n, 0) / n }; };
   const split = (src) => `${kpi("Punkte", src?.by_market?.points, "keine")}${kpi("DD / TD", merge(src?.by_market?.dd, src?.by_market?.td), "keine")}${kpi("Team", src?.team, "keine")}`;
   const line = (name, l, extra = "") => `<tr><td>${name}</td><td>${l.n ? `${l.hits}/${l.n}` : "–"}</td><td>${pct(l.hit_rate, 0)}</td><td>${pct(l.expected, 0)}</td>${extra}</tr>`;
+  const catTable = (src) => { const rows = (T.cats ?? []).filter((c) => src?.by_cat?.[c]?.n).map((c) => line(CAT_NAMES[c], src.by_cat[c])).join("");
+    return rows ? `<div class="tablewrap"><table><thead><tr><th>Team nach Kategorie</th><th>Treffer</th><th>Quote</th><th>Soll</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""; };
   const L = T.last;
   const lastHtml = L && L.date ? `<div class="section" style="gap:8px">
       <div class="row between"><h3>Letzte Nacht</h3><span class="muted">${esc(dayShort(L.date))}</span></div>
-      <div class="kpis">${split(L)}</div>
+      <div class="kpis">${split(L)}</div>${catTable(L)}
       ${[["Spieler-Tipps", L.items.filter((r) => r.name != null)], ["Team-Tipps", L.items.filter((r) => r.name == null)]].filter(([, xs]) => xs.length).map(([t, xs]) =>
         `<details class="more"><summary>${t} der Nacht (${xs.length})</summary><div class="inj" style="margin-top:10px">${xs.map(resultRow).join("")}</div></details>`).join("")}
     </div>` : `<div class="muted">Noch keine abgerechneten Tipps.</div>`;
@@ -674,7 +676,7 @@ function trackCard() {
     ${lastHtml}
     <div class="section" style="gap:8px">
       <div class="row between"><h3>Gesamt</h3><span class="muted">${T.since ? "seit " + esc(dayShort(T.since)) : ""}</span></div>
-      <div class="kpis">${split(T)}</div>
+      <div class="kpis">${split(T)}</div>${catTable(T)}
       <details class="more"><summary>Nach Markt</summary>
         <div class="tablewrap" style="margin-top:10px"><table>${head("Spieler")}<tbody>${pRows}</tbody></table></div>
         <div class="tablewrap" style="margin-top:14px"><table>${head("Team")}<tbody>${tRows}</tbody></table></div>
